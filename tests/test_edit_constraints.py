@@ -17,6 +17,12 @@ class EditConstraintTests(unittest.TestCase):
         self.assertTrue(comparative_issue(s,'Reduced delay from 60 seconds to 90 seconds.'))
         self.assertIsNone(comparative_issue(s,'Lowered delay by 30 seconds.'))
         self.assertIsNone(comparative_issue(s,'Delay fell from 90 seconds to 60 seconds.'))
+    def test_inclusive_result_is_not_a_strict_bound(self):
+        for original in ("Turnaround fell to <= 1 week.", "Turnaround fell to one week or less."):
+            self.assertTrue(comparative_issue([original], "Reduced turnaround to under one week."))
+            self.assertIsNone(comparative_issue([original], "Reduced turnaround to at most one week."))
+        self.assertIsNone(comparative_issue(["Turnaround was under 1 week."], "Reduced turnaround to under one week."))
+
     def test_separate_explicit_delta_not_overruled(self):
         s=['Lowered delay from 90 seconds to 60 seconds. Reduced setup time by 60 seconds.']
         self.assertIsNone(comparative_issue(s,'Reduced setup time by 60 seconds.'))

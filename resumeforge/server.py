@@ -81,7 +81,7 @@ def serve(port=8765, data_dir=None, open_browser=False):
             if path == "/api/health":
                 return self.reply({"status":"ok","app":"ResumeForge","version":__version__})
             if path == "/api/bootstrap":
-                return self.reply({"profile":json.loads((Path(__file__).with_name("data")/"abu.profile.json").read_text()),"settings":default_settings().model_dump()})
+                return self.reply({"profile":json.loads((Path(__file__).with_name("data")/"abu.profile.json").read_text(encoding="utf-8")),"settings":default_settings().model_dump()})
             match = re.fullmatch(r"/api/runs/([a-f0-9]{32})(/(preview|resume)\.pdf)?",path)
             if match:
                 run_id, suffix, kind = match.groups()
@@ -123,6 +123,12 @@ def serve(port=8765, data_dir=None, open_browser=False):
                         runs[run_id] = {"id":run_id,"status":"running","message":"Queued for local processing"}
                     executor.submit(do_run,run_id,request)
                     return self.reply(runs[run_id],202)
+                if self.path == "/api/analyze":
+                    from .job_analysis import analyze_posting
+                    request = RunRequest.model_validate(body)
+                    priorities = executor.submit(analyze_posting, request.profile, request.job_description,
+                                                 request.keywords, request.settings).result()
+                    return self.reply({"priorities": priorities})
                 if self.path == "/api/ideas":
                     request = IdeaRequest.model_validate(body)
                     return self.reply(executor.submit(brainstorm, request).result())

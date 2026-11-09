@@ -17,6 +17,7 @@ def main():
     cli.add_argument("--job",type=Path)
     cli.add_argument("--keywords",default="")
     cli.add_argument("--provider",choices=["none","ollama","openai-compatible"],default="none")
+    cli.add_argument("--mode", choices=["inspiration","grounded","verified"], default="inspiration")
     cli.add_argument("--model",default="")
     cli.add_argument("--endpoint",default="http://127.0.0.1:11434")
     cli.add_argument("--out",required=True,type=Path)
@@ -37,7 +38,7 @@ def main():
         request = RunRequest.model_validate_json(args.request.read_text()) if args.request else RunRequest(
             profile=Profile.model_validate_json(args.profile.read_text()), job_description=args.job.read_text() if args.job else "",
             keywords=[k.strip() for k in args.keywords.split(",") if k.strip()],
-            settings=ModelSettings(provider=args.provider,model=args.model,base_url=args.endpoint))
+            settings=ModelSettings(draft_mode="inspiration" if args.mode=="inspiration" else "grounded", wording_policy="verified" if args.mode=="verified" else "rewrite",provider=args.provider,model=args.model,base_url=args.endpoint))
         result = run(request,args.out,lambda m:print(m,flush=True))
         print(json.dumps({"status":result["status"],"bottom_gap_pt":result["report"]["bottom_gap_pt"],"output":str(args.out.resolve())},indent=2))
         if result["status"] != "ready":

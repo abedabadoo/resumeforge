@@ -1,0 +1,216 @@
+"""Recognize job capabilities and rank them using the posting's own structure."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import lru_cache
+import html
+import re
+
+
+@dataclass(frozen=True)
+class Capability:
+    label: str
+    phrases: tuple[str, ...]
+    related: tuple[str, ...] = ()
+    title_cues: tuple[str, ...] = ()
+
+
+# Alternate expressions in a posting form one priority. Neighbors help identify
+# transferable experience but do not establish an exact match to that priority.
+CAPABILITIES = (
+    Capability("Agentic engineering harnesses", ("agentic engineering harnesses", "agentic engineering harness",
+        "agentic workflows", "agentic workflow", "AI orchestration frameworks", "AI orchestration",
+        "AI agents", "agent-based architectures", "software development harnesses"),
+        ("LLM-powered", "LLM assistant", "LLM", "language models", "AI-assisted development")),
+    Capability("AI-assisted development", ("AI-assisted development", "AI-assisted coding", "AI-enabled development", "AI-assisted development tools",
+        "AI coding assistants", "AI pair programming"), ("AI code-review", "AI code review", "LLM-powered", "Claude",
+        "Claude Code", "GitHub Copilot", "Cursor", "Cline", "Aider"), ("Claude",)),
+    Capability("Claude Code CLI", ("Claude Code CLI", "Claude Code"), ("Claude", "AI code-review", "AI-assisted coding"),
+        ("Claude",)),
+    Capability("CI/CD", ("CI/CD", "continuous integration and continuous delivery", "continuous integration and deployment",
+        "continuous delivery", "continuous integration"), ("GitHub Actions", "GitLab CI", "GitLab", "Jenkins", "Azure Pipelines")),
+    Capability("Infrastructure as Code", ("infrastructure as code", "IaC", "infrastructure automation",
+        "cloud automation", "environment provisioning", "cloud-native solutions", "cloud-native infrastructure"),
+        ("infrastructure as code", "IaC", "AWS", "Amazon Web Services", "Google Cloud", "GCP", "Microsoft Azure", "Docker", "Terraform",
+         "CloudFormation", "Ansible", "Linux", "Unix", "Kubernetes")),
+    Capability("SDLC automation", ("SDLC automation", "automate software development lifecycle",
+        "software development lifecycle automation", "software development lifecycle processes", "automate the software development lifecycle",
+        "automated software delivery", "AI-driven SDLC"), ("CI/CD", "GitHub Actions", "AI code-review", "deployment automation")),
+    Capability("Programming and scripting", ("programming, scripting", "scripting", "programming skills",
+        "scripting skills"), ("Python", "Bash", "PowerShell", "Linux", "Unix", "Go language", "JavaScript")),
+    Capability("Platform integrations", ("integrating development platforms", "integrate engineering platforms",
+        "platform integrations", "engineering integrations", "API integrations"),
+        ("REST APIs", "REST API", "GraphQL", "webhooks", "OAuth", "Python", "Git", "GitHub Actions", "Datadog", "Jira", "ServiceNow")),
+    Capability("observability", ("observability",), ("monitoring", "Datadog", "SLO alerts", "runbooks",
+        "Prometheus", "Grafana", "Splunk", "OpenTelemetry", "alert ingestion")),
+    Capability("incident response", ("incident response", "incident management"), ("runbooks", "on-call", "Datadog", "SLO alerts", "observability",
+        "alert ingestion", "incident triage")),
+    Capability("risk management", ("risk management",), ("risk reviews", "risk assessments", "risk register",
+        "vendor risk", "risk assessment", "risk review")),
+    Capability("MCP", ("MCP", "Model Context Protocol")),
+    Capability("RAG", ("RAG", "retrieval-augmented generation")),
+    Capability("human-in-the-loop controls", ("human-in-the-loop controls", "human in the loop controls")),
+    Capability("AI governance", ("AI governance", "Responsible AI", "model risk management")),
+    Capability("data engineering", ("data engineering", "data pipelines"), ("Airflow", "Spark", "SQL", "PostgreSQL")),
+    Capability("financial forecasting", ("financial forecasting", "financial forecasts"), ("financial modeling", "Excel")),
+    Capability("demand forecasting", ("demand forecasting", "demand forecasts"), ("inventory planning", "forecast modeling")),
+)
+def normalize(text):
+    return re.sub(r"[\s‐‑–—-]+", " ", text.casefold()).strip()
+
+
+_BY_NAME = {normalize(term): cap for cap in CAPABILITIES for term in (cap.label, *cap.phrases)}
+
+
+def capability(term):
+    return _BY_NAME.get(normalize(term))
+
+
+@lru_cache(maxsize=2048)
+def literal_pattern(term):
+    pieces = re.split(r"[\s‐‑–—-]+", term.strip())
+    return re.compile(r"(?<![\w+#])" + r"[\s/‐‑–—-]+".join(map(re.escape, pieces)) + r"(?![\w+#])", re.I)
+
+
+def related(text, term):
+    cap = capability(term)
+    return bool(cap and any(literal_pattern(neighbor).search(text) for neighbor in (*cap.related, *cap.phrases)))
+
+
+@dataclass(frozen=True)
+class Passage:
+    text: str
+    section: str
+    title: bool
+
+
+_HEADINGS = {
+    "preferred": r"(?:preferred|desirable|additional|bonus|nice[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
+    "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|qualifications",
+    "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|the role|your impact",
+    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|about (?:us|the company)|how to apply",
+}
+_EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
+_PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|bonus|a plus)\b", re.I)
+_REQUIRED = re.compile(r"\b(?:must|required|essential|mandatory|minimum)\b", re.I)
+
+
+def passages(job):
+    rows = []
+    section = "intro"
+    content = html.unescape(job).replace("\\", "").replace("**", "")
+    for line in content.splitlines():
+        line = re.sub(r"^[\s•#*-]+", "", line).strip()
+        if not line:
+            continue
+        if line.casefold().strip(": ") in ("job description", "job title", "position"):
+            continue
+        for name, expression in _HEADINGS.items():
+            header = re.match(rf"^(?:{expression})(?:\s*[:–—-]\s*|\s*$)", line, re.I)
+            if header:
+                section = name
+                line = line[header.end():].strip()
+                break
+        if not line or section == "ignore":
+            continue
+        title = not rows and section == "intro" and len(line.split()) <= 18 and (
+            bool(re.search(r"\b(?:engineer|developer|analyst|designer|manager|coordinator|devops|architect|nurse|specialist|director|accountant|technician|scientist|officer|lead)\b", line, re.I))
+            and not bool(re.match(r"(we|the ideal|you|our|must|seeking)\b", line, re.I)))
+        for sent in re.split(r"[;]|(?<!\be\.g)(?<=[.!?])\s+", line):
+            if sent.strip():
+                rows.append(Passage(sent.strip().rstrip("."), section, title))
+    return rows
+
+
+def locations(row, terms):
+    return [match.start() for term in terms for match in [literal_pattern(term).search(row.text)] if match]
+
+
+def score(rows, phrases, cues=()):
+    found = []
+    for row in rows:
+        indexes = locations(row, phrases)
+        if not indexes:
+            continue
+        example = _EXAMPLES.search(row.text)
+        is_example = bool(example and min(indexes) >= example.end())
+        # In "tools such as A, B, or similar, and has experience building X",
+        # X is a separate requirement rather than an alternative to A or B.
+        if is_example and re.search(r"(?:\.\s+|\b(?:and|who) (?:has|have|can|will|builds?|designs?)\b|\bor (?:equivalent|similar)\b)", row.text[example.end():min(indexes)], re.I):
+            is_example = False
+        is_preferred = row.section == "preferred" or bool(_PREFERRED.search(row.text))
+        is_required = (row.section == "required" or bool(_REQUIRED.search(row.text))) and not is_preferred
+        points = 3 if is_example else 5 if is_preferred else 17 if is_required else 10 if row.section == "duties" else 8
+        found.append((points, row.section, is_required and not is_example, row.title, is_example, is_preferred))
+    if not found:
+        return None
+    title_hit = any(item[3] for item in found) or any(row.title and locations(row, cues) for row in rows)
+    sections = len({item[1] for item in found if not item[4]})
+    points = max(i[0] for i in found) + min(len(found) - 1, 3) * 1.4 + max(0, sections - 1) * 2 + (8 if title_hit else 0)
+    required = any(i[2] for i in found)
+    if title_hit:
+        reason = "Specialty named in the job title."
+    elif required:
+        reason = "Required qualification" + (" also present in the role description." if sections > 1 else ".")
+    elif all(i[4] for i in found):
+        reason = "One of several example tools accepted by the posting."
+    elif all(i[5] for i in found):
+        reason = "Preferred qualification."
+    elif sections > 1:
+        reason = "Repeated across the role description and its responsibilities."
+    else:
+        reason = "Named in the role description."
+    weight = 5 if required or title_hit or points >= 17 else 4 if points >= 10 else 3 if points >= 7 else 2
+    return points, weight, required, reason
+
+
+_DUTY_VERBS = r"build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare|administer|develop|lead|monitor|review|assess|support"
+_QUALIFIER = re.compile(r"^(?:(?:demonstrated|hands.on|strong|proven|working|practical|prior) +)*(?:(?:experience|proficiency|expertise|knowledge|skills?) (?:with|in|of) |skilled in )", re.I)
+
+
+def _listed_requirements(row):
+    if row.section not in {"required", "preferred", "duties"}:
+        return []
+    # A short nominal list is often the whole qualifications section in a
+    # posting for a nontechnical occupation. Keep multiword terms together.
+    text = _QUALIFIER.sub("", row.text)
+    if len(text.split()) > 16 or re.match(
+            rf"(?:{_DUTY_VERBS}|experience|ensure|configure|integrate|develop|promote|automate|designing|strong|ability|knowledge|you|the|we|our)\b",
+            text, re.I):
+        return []
+    parts = re.split(r"\s*,\s*|\s+and\s+|\s+or\s+", text)
+    result = []
+    for part in parts:
+        phrase = re.sub(r"^(?:and|or)\s+", "", _QUALIFIER.sub("", part.strip()), flags=re.I)
+        phrase = re.sub(r"\s+(?:is |are )?(?:preferred|required|a plus)$", "", phrase, flags=re.I)
+        if not 1 <= len(phrase.split()) <= 4 or not 3 <= len(phrase) <= 65:
+            continue
+        if re.search(r"\b(?:with|we|you|will|to|that|who|have|has|such|similar|equivalent|skills?|experience|solutions|platforms|systems|ability|ability to|working|degree|required|preferred|strong|proficiency|knowledge|years?|benefits|other|understanding|practices|functions|methodologies|technologies|qualifications)\b", phrase, re.I):
+            continue
+        if re.match(rf"(?:{_DUTY_VERBS}|designing|building|implementing|the|a|an)\b", phrase, re.I):
+            continue
+        if re.fullmatch(r"[A-Za-z][\w +/#&.-]*", phrase):
+            result.append(phrase)
+    return result
+
+def observed_phrases(rows):
+    """Keep named products and bounded duty phrases outside the vocabulary."""
+    seen = {}
+    for row in rows:
+        if row.title:
+            continue
+        # Product names like SnowplowDB, OASIS and OpenTelemetry.
+        tokens = _listed_requirements(row)
+        tokens.extend(re.findall(r"(?<![\w])(?:[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[A-Z]{2,}[A-Z0-9]{0,9})(?![\w])", row.text))
+        # A short object after a concrete duty or requirement carries more
+        # meaning than isolated bag-of-words fragments from the whole advert.
+        for match in re.finditer(
+            r"\b(?:experience (?:with|in)|proficiency in|expertise in|knowledge of|skilled in|build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare)\s+"
+            r"([\w][\w /&-]{2,65}?)(?=\s+(?:and|or|for|with|to|across|that|using|such|including|while|within|in)\b|[,.;:(]|$)",row.text,re.I):
+            phrase = re.sub(r"^(?:a|an|the|our)\s+", "", match[1], flags=re.I).strip()
+            if len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
+                tokens.append(phrase)
+        for text in tokens:
+            if normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents"}:
+                seen.setdefault(normalize(text), text)
+    return list(seen.values())

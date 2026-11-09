@@ -78,7 +78,7 @@ def edit_settings(parent, settings: ModelSettings):
     dialog, layout = _editor(parent, "Model settings", 540, 475)
     form = QFormLayout()
     layout.addLayout(form)
-    provider = _choice([("Use source wording", "none"), ("Ollama", "ollama"),
+    provider = _choice([("Offline (no model)", "none"), ("Ollama", "ollama"),
                         ("OpenAI-compatible endpoint", "openai-compatible")], settings.provider)
     provider.setObjectName("modelProvider")
     endpoint = QLineEdit(settings.base_url)
@@ -116,7 +116,7 @@ def edit_settings(parent, settings: ModelSettings):
         for widget in (endpoint, model, discover, workflow, timeout, rounds):
             widget.setEnabled(key != "none")
         api_env.setEnabled(key == "openai-compatible")
-        note.setText("Use an installed model for new wording. Source-only mode can build a PDF and offer sample bullet ideas." if key=="none" else
+        note.setText("Offline mode draws from built-in example accomplishments. Connect a local model to generate more varied wording." if key=="none" else
                      "Enter the model name from your service, or find models on this computer.")
 
     def find_models():
@@ -281,3 +281,42 @@ def review_proposals(parent, profile: Profile, plan: Plan):
         return new_plan, ids
 
     return _finish(dialog, layout, collect, "Apply and recheck")
+
+
+def edit_generated_bullets(parent, profile: Profile, bullets):
+    dialog, layout = _editor(parent, "Edit generated bullets", 660, 520)
+    layout.addWidget(_label("Edit these examples for this resume. Clear a bullet to let the original experience fill its place."))
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    contents = QWidget()
+    rows = QVBoxLayout(contents)
+    roles = {role.id: role for role in profile.roles}
+    controls = []
+    for bullet in bullets:
+        role = roles[bullet["role_id"]]
+        group = QGroupBox(f"{role.title} · {role.company}")
+        form = QVBoxLayout(group)
+        if bullet.get("keywords"):
+            form.addWidget(_label("Target: " + ", ".join(bullet["keywords"])))
+        editor = QPlainTextEdit(bullet["text"])
+        editor.setObjectName("generatedBulletText")
+        editor.setMinimumHeight(76)
+        form.addWidget(editor)
+        rows.addWidget(group)
+        controls.append((bullet, editor))
+    rows.addStretch()
+    scroll.setWidget(contents)
+    layout.addWidget(scroll)
+
+    def collect():
+        edits = {}
+        for bullet, editor in controls:
+            text = editor.toPlainText().strip()
+            if text != bullet["text"]:
+                from .inspiration import printable
+                if text and not printable(text):
+                    raise ValueError("Use 8–100 words (up to 800 characters) without markup or placeholders, or clear the bullet.")
+                edits[bullet["id"]] = text
+        return edits
+
+    return _finish(dialog, layout, collect, "Apply and refit page")

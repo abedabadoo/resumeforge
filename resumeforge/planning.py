@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from contextvars import ContextVar
+from functools import lru_cache
 import time
 import os
 import re
@@ -18,6 +19,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from . import priorities as priorities_lib
 from .models import Candidate, Keyword, ModelSettings, Plan, Profile, Proposal, Review
 
 CALLS = ContextVar('resumeforge_call_metrics',default=None)
@@ -30,7 +32,17 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "IMDSv2": ("IMDSv2", "Instance Metadata Service Version 2"),
     "EC2": ("EC2", "Elastic Compute Cloud"), "KMS": ("KMS", "Key Management Service"),
     "RDS": ("RDS", "Relational Database Service"),
-    "Azure": ("Azure", "Microsoft Azure"),
+    "Azure": ("Azure", "Microsoft Azure"), "Azure DevOps": ("Azure DevOps", "Azure DevOps Services"),
+    "Claude Code CLI": ("Claude Code CLI", "Claude Code"),
+    "Agentic engineering harnesses": ("agentic engineering harness", "agentic engineering harnesses"),
+    "AI orchestration frameworks": ("AI orchestration frameworks", "AI orchestration framework"),
+    "AI-assisted development": ("AI-assisted development", "AI-assisted coding"),
+    "SDLC automation": ("SDLC automation", "software development lifecycle automation", "automated software development lifecycle",
+                        "automate software development lifecycle"),
+    "Infrastructure as Code": ("Infrastructure as Code", "IaC"),
+    "MCP": ("MCP", "Model Context Protocol"), "RAG": ("RAG", "Retrieval-Augmented Generation"),
+    "REST API": ("REST API", "REST APIs", "RESTful API", "RESTful APIs"),
+    "GitHub Copilot": ("GitHub Copilot",),
     "Google Cloud": ("Google Cloud", "Google Cloud Platform", "GCP"),
     "Terraform": ("Terraform",), "Prometheus": ("Prometheus",),
     "Grafana": ("Grafana",), "Kubernetes": ("Kubernetes", "K8s"),
@@ -79,6 +91,7 @@ def _normalized(text: str) -> str:
     return re.sub(r"\s+", " ", text.casefold().replace("–", "-").replace("—", "-")).strip()
 
 
+@lru_cache(maxsize=2048)
 def _pattern(term: str) -> str:
     escaped = re.escape(term.strip())
     escaped = escaped.replace(r"\ ", r"[\s\-/]+")
@@ -86,6 +99,7 @@ def _pattern(term: str) -> str:
     return r"(?<![\w+#])" + escaped + r"(?![\w+#])"
 
 
+@lru_cache(maxsize=2048)
 def _canonical(term: str) -> str:
     norm = _normalized(term)
     for canonical, names in ALIASES.items():
@@ -104,6 +118,10 @@ def keyword_matches(text: str, term: str) -> bool:
     aliases = ALIASES.get(canonical, (term.strip(),))
     # A standalone lowercase 'go' is normally a verb, not the language.
     flags = 0 if canonical == "Go" else re.IGNORECASE
+    if canonical == "Azure":
+        text = re.sub(_pattern("Azure DevOps"), "", text, flags=re.I)
+    if canonical == "GitHub":
+        text = re.sub(_pattern("GitHub Copilot"), "", text, flags=re.I)
     return any(re.search(_pattern(alias), text, flags) is not None for alias in aliases)
 
 
@@ -139,9 +157,25 @@ def rank_skills(profile: Profile, keywords: list[Keyword] | list[str]) -> list[s
                      or re.fullmatch(r"[A-Z][A-Z0-9]{1,9}", term) is not None)
         if technical and any(_positive_use(source, term) for source in evidence):
             clean.append(canonical)
-    scored = [(sum(weight for term, weight in priorities
-                   if keyword_matches(skill, term)), index, skill)
-              for index, skill in enumerate(clean)]
+    # Make explicit labels and adjacent capabilities comparable. Cloud-native
+    # work calls for actual cloud skills, even if the posting is vendor-neutral.
+    scored = []
+    for index, skill in enumerate(clean):
+        matches = []
+        for position, (term, weight) in enumerate(priorities):
+            # A core capability can be more relevant than an incidental exact
+            # tool match. Attenuate later priorities in long postings.
+            focus = weight / (1 + position / 10)
+            cap = priorities_lib.capability(term)
+            if keyword_matches(skill, term):
+                matches.append(focus)
+            elif cap and any(priorities_lib.literal_pattern(t).search(skill) for t in cap.phrases):
+                matches.append(focus * .95)
+            elif priorities_lib.related(skill, term):
+                matches.append(focus * .7)
+        strongest = max(matches, default=0)
+        score = strongest + min(1.2, (sum(matches) - strongest) * .24)
+        scored.append((score, index, skill))
     if not any(score for score, _, _ in scored):
         return clean
     scored.sort(key=lambda item: (-item[0], item[1]))
@@ -176,62 +210,145 @@ def _positive_use(evidence: str, term: str) -> bool:
                and not _NEGATIVE_OR_FUTURE.search(clause) for clause in clauses)
 
 
-def _keyword_plan(profile: Profile, job: str, explicit: list[str]) -> list[Keyword]:
-    terms = [t.strip() for t in explicit if t.strip()]
-    terms += [term for term in (*ALIASES, *STRENGTHS, *DOMAINS)
-              if keyword_matches(job, term)]
-    # Include actual skill labels when a posting names them.
-    terms += [s for s in profile.skills if len(s) <= 100 and keyword_matches(job, s)]
-    result: list[Keyword] = []
-    seen: set[str] = set()
-    for term in terms:
-        canonical = _canonical(term)
-        key = _normalized(canonical)
-        if key in seen or len(canonical) > 100:
+def _targets(profile, job, explicit):
+    rows = priorities_lib.passages(job)
+    explicit = list(dict.fromkeys(_canonical(t.strip()) for t in explicit if t.strip() and len(t.strip()) <= 100))
+    targets = {}
+    found_groups = set()
+
+    def record(label, mentions, cues=(), kind="skill"):
+        rank = priorities_lib.score(rows, mentions, cues)
+        if rank is None:
+            return
+        points, weight, required, reason = rank
+        display = _canonical(label)
+        terms = list(dict.fromkeys(m for m in mentions if any(priorities_lib.locations(r, (m,)) for r in rows)))
+        targets[display.casefold()] = (points, Keyword(term=display, weight=weight, kind=kind, required=required,
+                                                      rationale=reason), terms)
+
+    claude_mentioned = keyword_matches(job, "Claude Code CLI")
+    for cap in priorities_lib.CAPABILITIES:
+        present = [phrase for phrase in cap.phrases if any(priorities_lib.locations(r, (phrase,)) for r in rows)]
+        if not present:
             continue
-        seen.add(key)
-        contexts = [line for line in re.split(r"[\n;.!?]", job) if keyword_matches(line, term)]
-        required = any(re.search(r"\b(must|required|requirements|minimum|essential)\b", c, re.I)
-                       for c in contexts)
-        preferred = any(re.search(r"\b(preferred|nice to have|bonus|a plus)\b", c, re.I)
-                        for c in contexts)
-        explicit_term = any(_normalized(_canonical(t)) == key for t in explicit)
-        weight = 5 if required else (4 if explicit_term else (2 if preferred else 3))
-        kind = "tool" if canonical in ALIASES else (
-            "strength" if key in STRENGTHS else "domain" if canonical in DOMAINS else "skill")
-        rationale = ("Explicit requirement in the posting." if required else
-                     "User requested priority." if explicit_term else
-                     "Preferred qualification in the posting." if preferred else
-                     "Named in the posting; contextual relevance still requires review.")
-        result.append(Keyword(term=canonical, weight=weight, kind=kind,
-                              required=required, rationale=rationale))
-    return sorted(result, key=lambda k: -k.weight)
+        if cap.label == "AI-assisted development" and claude_mentioned:
+            continue
+        # Print the posting's label rather than adding a more specific technology.
+        label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation") else (
+            cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
+        phrases = cap.phrases
+        if cap.label == "Claude Code CLI":
+            phrases += priorities_lib.capability("AI-assisted development").phrases
+        record(label, phrases, cap.title_cues, "tool" if cap.label in ("Claude Code CLI","MCP","RAG") else "domain")
+        found_groups.update(priorities_lib.normalize(t) for t in (cap.label, *phrases))
+
+    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS, *profile.skills]))
+    for term in known:
+        if (len(term) > 100 or priorities_lib.normalize(term) in found_groups or
+                not any(keyword_matches(row.text, term) for row in rows)):
+            continue
+        canon = _canonical(term)
+        # The target "GitHub Copilot" must not manufacture a GitHub requirement.
+        spellings = ALIASES.get(canon, (term,))
+        relevant_rows = [row for row in rows if keyword_matches(row.text, canon)]
+        rank = priorities_lib.score(relevant_rows, spellings)
+        if rank:
+            points, weight, required, reason = rank
+            kind = "tool" if canon in ALIASES else "strength" if canon in STRENGTHS else "domain" if canon in DOMAINS else "skill"
+            targets.setdefault(canon.casefold(), (points, Keyword(term=canon, weight=weight, required=required, kind=kind,
+                                                                   rationale=reason), [canon]))
+
+    for term in priorities_lib.observed_phrases(rows):
+        # Preserve novel concrete duties for occupations outside the glossary.
+        # Skip nested terms from a cluster, such as CLI, and syntactic fragments.
+        if any(priorities_lib.literal_pattern(term).search(alias) for _, _, mentions in targets.values() for alias in mentions):
+            continue
+        if any(keyword_matches(term, label.term) for _, label, _ in targets.values()):
+            continue
+        record(term, [term])
+    for order, term in enumerate(explicit):
+        key = term.casefold()
+        prev = targets.get(key)
+        keyword = prev[1] if prev else Keyword(term=term, kind="strength" if key in STRENGTHS else "tool" if term in ALIASES else "skill")
+        targets[key] = (1000-order, keyword.model_copy(update={"weight": max(4, keyword.weight),
+            "rationale": "User requested priority."}), prev[2] if prev else [term])
+    return sorted(targets.values(), key=lambda item: -item[0])
 
 
-def selected_skills(profile,plan,settings,edit_request=""):
-    """Rank existing related technologies without claiming the target itself."""
-    direct=rank_skills(profile,plan.keywords)
-    if settings.provider=="none" or settings.strategy!="laptop":
+def _keyword_plan(profile: Profile, job: str, explicit: list[str]) -> list[Keyword]:
+    return [keyword for _, keyword, _ in _targets(profile, job, explicit)]
+
+
+def _reviewed(profile, job, terms):
+    """An edited shortlist replaces the posting's suggestions, in the supplied order."""
+    requested = list(dict.fromkeys(t.strip() for t in terms if t.strip() and len(t.strip()) <= 100))
+    options = {k.term.casefold(): k for k in _keyword_plan(profile, job, requested)}
+    result = []
+    for term in requested:
+        canonical = _canonical(term)
+        existing = options[canonical.casefold()]
+        if any(k.term.casefold() == canonical.casefold() for k in result):
+            continue
+        result.append(existing.model_copy(update={"weight": max(1, 5 - len(result) * 4 // max(1,len(requested))),
+                                                  "rationale": "Priority order reviewed by the user."}))
+    return result
+
+
+reviewed_priorities = _reviewed
+
+
+def _asserted_text(body):
+    # Direct denials and hypothetical/tool-evaluation plans are not evidence
+    # of hands-on use. Keep positive clauses in the same accomplishment.
+    clauses = re.split(r"[;\n]|(?<=[.!?])\s+|\b(?:but|whereas|however)\b", body, flags=re.I)
+    return " ".join(c for c in clauses if not re.search(
+        r"\b(?:never|did not|do not|does not|didn['’]t|no (?:experience|exposure) with|planned to|plan to|would like to|hop(?:e|ed) to)\b",
+        c, re.I))
+
+
+def _evidence_for(keyword, records, skills):
+    term = keyword.term
+    exact = [eid for eid, body in records if keyword_matches(body, term)]
+    linked = [eid for eid, body in records if eid not in exact and priorities_lib.related(body, term)]
+    direct_skills = [s for s in skills if keyword_matches(s, term)]
+    related_skills = [s for s in skills if s not in direct_skills and priorities_lib.related(s, term)]
+    evidence = "exact" if exact or direct_skills else "related" if linked or related_skills else "missing"
+    return {**keyword.model_dump(), "evidence": evidence, "evidence_ids": exact or linked,
+            "exact_skills": direct_skills, "related_skills": related_skills}
+
+
+def analyze_job(profile, job_description, keywords=()):
+    """Return ranked posting requirements and the original profile's evidence for each."""
+    records = [(ev.id, _asserted_text(ev.text)) for ev in profile.evidence().values() if ev.confirmed and ev.role_id]
+    return [{**_evidence_for(kw, records, profile.skills), "terms": terms}
+            for _, kw, terms in _targets(profile, job_description, keywords)]
+
+
+def keyword_coverage(keywords, bullets, skills):
+    records = [(b.id, b.text) if hasattr(b, "text") else (str(i), b) for i, b in enumerate(bullets)]
+    details = [_evidence_for(kw, records, skills) for kw in keywords]
+    return {key: [d["term"] for d in details if d["evidence"] == evidence]
+            for key, evidence in (("matched", "exact"), ("related","related"), ("missing","missing"))} | {
+        "details": details, "description": "Exact labels and related skills in the rendered resume. These are editorial matches, not an ATS score."}
+
+
+def bullet_relevance(text, keywords):
+    """Credit actual capability matches and discount transferable evidence."""
+    return sum(kw.weight * (1 if keyword_matches(text, kw.term) else .36 if priorities_lib.related(text, kw.term) else 0)
+               for kw in keywords)
+
+
+def selected_skills(profile, plan, settings, edit_request=""):
+    """Prioritize direct and transferable skills, then any additional model picks."""
+    direct = rank_skills(profile, plan.keywords)
+    if settings.provider == "none" or settings.strategy != "laptop":
         return direct
-    targets="; ".join(k.term for k in plan.keywords)
-    known=[s for s in profile.skills if s in plan.skill_order]
-    ordered=[s for s in plan.skill_order if s in known]
-    strict=bool(re.search(r"\b(remove|exclude|omit|except)\b|\bonly (these|those|the following|list|include|show)\b",edit_request,re.I))
-    adjacent=[]
-    if not strict:
-        related=[
-          (("CI/CD","continuous integration","continuous delivery"),("GitHub Actions","GitLab","Git","Jenkins","Docker")),
-          (("monitoring","observability","alerting"),("Datadog","Prometheus","Grafana","Splunk")),
-          (("AWS","cloud platform","cloud infrastructure"),("Infrastructure as Code","Linux","TCP/IP","Role-based Access Control")),
-          (("vulnerability analysis","security monitoring"),("OWASP ZAP","Datadog","Vulnerability Analysis")),
-          (("data engineering","SQL"),("PostgreSQL","SQL","Python","MongoDB")),
-        ]
-        for triggers,neighbors in related:
-            if any(keyword_matches(targets,t) for t in triggers):
-                adjacent.extend(s for s in profile.skills if any(keyword_matches(s,n) for n in neighbors))
-    literal=[s for s in direct if any(keyword_matches(s,k.term) for k in plan.keywords)]
-    combined=list(dict.fromkeys(literal+ordered+adjacent))
-    return combined or direct
+    ordered = [s for s in plan.skill_order if s in profile.skills]
+    strict = bool(re.search(r"\b(remove|exclude|omit|except)\b|\bonly (these|those|the following|list|include|show)\b", edit_request, re.I))
+    if strict:
+        literal = [s for s in direct if any(keyword_matches(s, k.term) for k in plan.keywords)]
+        return list(dict.fromkeys(literal + ordered)) or direct
+    return list(dict.fromkeys(direct + ordered)) if plan.keywords else ordered or direct
 
 
 def _numbers(text: str) -> set[str]:
@@ -468,20 +585,28 @@ Rank keyword weights 1–5 by role relevance, not by repetition. Use notes for r
 
 
 def build_plan(profile: Profile, job_description: str, keywords: list[str],
-               settings: ModelSettings, feedback: str = "", edit_request: str = "") -> Plan:
+               settings: ModelSettings, feedback: str = "", edit_request: str = "", reviewed_priorities=None) -> Plan:
     """Return original alternatives plus evidence-checked model proposals."""
-    baseline = _baseline(profile, _keyword_plan(profile, job_description, keywords))
+    priorities = (_reviewed(profile, job_description, reviewed_priorities) if reviewed_priorities is not None
+                  else _keyword_plan(profile, job_description, keywords))
+    baseline = _baseline(profile, priorities)
+    focus = [k.term for k in priorities[:18]]
     if settings.provider == "none":
         baseline.notes.append("AI is disabled. Exact source content and confirmed facts are available; no rewriting was performed.")
         return baseline
     if settings.wording_policy == "verified":
         from .wording import rank_verified_plan
-        return rank_verified_plan(profile, baseline, job_description, keywords, settings, edit_request)
+        result = rank_verified_plan(profile, baseline, job_description, focus, settings, edit_request)
+        if reviewed_priorities is not None:
+            result.keywords = priorities
+        return result
     if settings.strategy == "laptop":
         from .laptop import propose
-        generated = propose(profile, job_description, keywords, settings, feedback, edit_request)
+        generated = propose(profile, job_description, focus, settings, feedback, edit_request)
     else:
         generated = _full_plan(profile, job_description, baseline, settings, feedback, edit_request)
+    if reviewed_priorities is not None:
+        generated.keywords = []
     return _admit_generated(profile, job_description, keywords, baseline, generated, edit_request)
 
 
@@ -510,7 +635,11 @@ def _admit_generated(profile, job_description, keywords, baseline, generated, ed
             continue
         prior = merged_keywords.get(key)
         required = bool(prior and prior.required) or (keyword.required and in_job)
-        floor = 5 if required else 4 if key in explicit_keys else 1
+        floor = 5 if required else 4 if key in explicit_keys else prior.weight if prior and prior.weight >= 4 else 1
+        if prior and prior.rationale.startswith(("One of several", "Preferred qualification")) and key not in explicit_keys:
+            required = prior.required
+            keyword = keyword.model_copy(update={"weight": min(keyword.weight, prior.weight)})
+            floor = prior.weight
         kind = "strength" if key in STRENGTHS else "tool" if canonical in ALIASES else keyword.kind
         merged_keywords[key] = keyword.model_copy(update={
             "term": prior.term if prior else canonical, "kind": kind,

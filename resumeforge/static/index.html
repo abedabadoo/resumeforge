@@ -31,7 +31,7 @@
       <section class="model-card">
         <div class="card-heading"><span class="step">02</span><h2>Writing engine</h2></div>
         <button type="button" id="use-laptop" class="button secondary full-width" hidden>Use installed laptop model</button><label for="provider">Model provider</label>
-        <select id="provider"><option value="none">No model · layout only</option><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI-compatible API</option></select>
+        <select id="provider"><option value="none">Offline · built-in examples</option><option value="ollama">Ollama</option><option value="openai-compatible">OpenAI-compatible API</option></select>
         <div id="model-fields" hidden>
           <label for="base-url">Endpoint</label><input id="base-url" type="url" spellcheck="false" placeholder="http://127.0.0.1:11434">
           <label for="model-name">Model name</label><input id="model-name" type="text" spellcheck="false" placeholder="Your installed model" list="available-models"><datalist id="available-models"></datalist>
@@ -58,14 +58,20 @@
         <label for="job-description">Job description</label>
         <textarea id="job-description" rows="8" maxlength="40000" placeholder="Paste the role’s responsibilities, requirements, and preferred experience…"></textarea>
         <div class="field-meta"><span>Used to prioritize relevant experience</span><span id="job-count">0 / 40,000</span></div>
-        <label for="edit-request">Your editing instructions <span class="optional">optional</span></label><textarea id="edit-request" rows="2" maxlength="3000" placeholder="For example: emphasize cloud security and keep the audit result concise."></textarea><p class="micro">These are your directions. The job posting supplies context; it does not supply new experience.</p><label for="keywords">Keywords to emphasize <span class="optional">optional</span></label>
-        <textarea id="keywords" class="keywords-input" rows="2" placeholder="AWS, Terraform, CI/CD pipelines, Prometheus, Grafana"></textarea>
-        <p class="micro">Separate terms with commas. Existing skills and evidence determine placement; new claims require your review.</p>
+        <button type="button" id="analyze-job" class="button secondary">Analyze posting</button>
+        <p id="analysis-status" class="inline-status" role="status"></p>
+        <details id="analysis-detail" class="small-details" hidden><summary>Why these priorities?</summary><ol id="analysis-list" class="note-list"></ol></details>
+        <label for="keywords">Priority list</label>
+        <textarea id="keywords" rows="5" placeholder="Analyze the posting to see suggested priorities, highest first."></textarea>
+        <p class="micro">Add, remove, or reorder terms before building. Use one per line. Your reviewed list sets the order.</p>
+        <label for="edit-request">Editing instructions <span class="optional">optional</span></label>
+        <textarea id="edit-request" rows="2" maxlength="3000" placeholder="For example: emphasize deployment automation in the first job."></textarea>
       </section>
-
-      <label for="wording-policy">Experience wording</label>
-      <select id="wording-policy"><option value="rewrite">Generate tailored wording</option><option value="verified">Use only my verified wording</option></select>
-      <p class="micro">Verified wording lets the engine select existing bullets and skills. Each experience statement stays word for word with its original job. Add verified experience below to give it more options.</p>
+      <label for="draft-mode">Bullet generation</label>
+      <select id="draft-mode"><option value="inspiration">Create role-specific examples</option><option value="grounded">Use only supported experience</option></select>
+      <p class="micro">Examples can include invented work and numbers. They are editable in this draft and stay separate from your source profile.</p>
+      <div id="grounded-options" hidden><label for="wording-policy">Supported experience wording</label>
+      <select id="wording-policy"><option value="rewrite">Reword supported experience</option><option value="verified">Keep exact source wording</option></select></div>
 
       <details class="editor-details" id="ideas-details">
         <summary><span>Brainstorm bullet ideas</span><span class="summary-icon" aria-hidden="true">+</span></summary>
@@ -84,6 +90,7 @@
 
       <div class="action-area"><button id="run-button" class="button primary" type="button" disabled><span id="run-label">Build & inspect PDF</span><span aria-hidden="true">↗</span></button><p id="run-note">No model connected. This checks the source layout.</p></div>
 
+      <section id="example-section" class="review-section" hidden><div class="section-title"><h2>New bullet points</h2></div><p class="helper-text">These examples appear as ordinary bullets on the PDF. Edit an example below or clear it to return its slot to the source options.</p><div id="example-list"></div><button id="apply-examples" type="button" class="button secondary">Apply changes and refit</button></section>
       <section id="review-section" class="review-section" hidden aria-labelledby="review-title"><div class="section-title"><h2 id="review-title">Claims to review</h2><span id="claim-count" class="count-badge"></span></div><p class="helper-text">These statements include experience the source does not establish. Edit the wording and confirm only what is accurate. Unconfirmed claims cannot be exported.</p><div id="claims-list"></div><button id="apply-review" class="button secondary full-width" type="button">Apply reviewed edits & check fit</button></section>
 
       <section id="results-section" hidden class="results-section"><div class="section-title"><h2>What changed</h2><span id="change-count" class="subtle-tag"></span></div><div id="keyword-coverage" class="coverage"></div><div id="change-list"></div><details id="warnings-details" class="small-details" hidden><summary>Review notes</summary><ul id="warning-list" class="note-list"></ul></details></section>

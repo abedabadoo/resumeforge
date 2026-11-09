@@ -75,6 +75,7 @@ class Keyword(Model):
 
 
 class Candidate(Model):
+    origin: Literal["source", "model-example", "offline-example", "edited-example"] = "source"
     parts: list[str] = Field(default_factory=list,max_length=2)
     id: str
     role_id: str
@@ -111,6 +112,7 @@ class Plan(Model):
 
 
 class ModelSettings(Model):
+    draft_mode: Literal["inspiration", "grounded"] = "inspiration"
     wording_policy: Literal["rewrite", "verified"] = "rewrite"
     strategy: Literal["full", "laptop"] = "full"
     provider: Literal["none", "ollama", "openai-compatible"] = "none"
@@ -150,6 +152,8 @@ class RunRequest(Model):
     settings: ModelSettings = Field(default_factory=ModelSettings)
     plan: Plan | None = None
     confirmed_claim_ids: list[str] = Field(default_factory=list)
+    reviewed_priorities: list[str] | None = Field(default=None, max_length=100)
+    draft_edits: dict[str, str] = Field(default_factory=dict, max_length=100)
 
 
 class Review(Model):

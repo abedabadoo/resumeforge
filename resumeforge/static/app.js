@@ -4,6 +4,14 @@
 const $ = (id) => document.getElementById(id);
 const DRAFT_KEY = "resumeforge.draft.v1";
 const state = { profile: null, plan: null, result: null, busy: false, importing: false, claimEdits: new Map(), confirmed: new Set(), pollTimer: null };
+let analysisKey = null;
+let analysisRows = [];
+let priorityJob = null;
+let suggestedList = "";
+let analyzing = false;
+let revision = 0;
+const exampleEdits = new Map();
+let exampleRows = [];
 const scratch = { drafts: [], loading: false, generation: 0 };
 const IDEAS_PER_ROLE = 12;
 
@@ -74,10 +82,12 @@ function settings(allowBlankModel = false) {
   }
   const apiKeyEnv = $("api-key-env").value.trim() || "RESUMEFORGE_API_KEY";
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(apiKeyEnv)) throw new Error("Enter an environment variable name for the API key, such as RESUMEFORGE_API_KEY. Never enter the key itself.");
-  return { strategy: $("strategy").value, wording_policy: $("wording-policy").value, provider, base_url: baseUrl || "http://127.0.0.1:11434", model, api_key_env: apiKeyEnv, timeout_seconds: timeout, max_rounds: maxRounds };
+  return { draft_mode: $("draft-mode").value, strategy: $("strategy").value, wording_policy: $("draft-mode").value === "inspiration" ? "rewrite" : $("wording-policy").value, provider, base_url: baseUrl || "http://127.0.0.1:11434", model, api_key_env: apiKeyEnv, timeout_seconds: timeout, max_rounds: maxRounds };
 }
 
 function populateSettings(value = {}) {
+  $("draft-mode").value = value.wording_policy === "verified" || value.draft_mode === "grounded" ? "grounded" : "inspiration";
+  $("grounded-options").hidden = $("draft-mode").value === "inspiration";
   $("wording-policy").value = value.wording_policy === "verified" ? "verified" : "rewrite";
   $("strategy").value = value.strategy || "full";
   $("provider").value = ["none", "ollama", "openai-compatible"].includes(value.provider) ? value.provider : "none";
@@ -97,8 +107,8 @@ function updateProvider() {
   $("model-note").textContent = connected
     ? "The endpoint supplies the writing model. ResumeForge measures and checks the resulting PDF locally."
     : "Render and inspect your resume without AI. Connect a model for contextual rewriting.";
-  $("run-label").textContent = connected ? "Tailor & fit page" : "Build & inspect PDF";
-  $("run-note").textContent = connected ? "Rewrite, render, measure, and review. Export unlocks when the checks pass." : "No model connected. This checks the source layout and text.";
+  updateActions();
+  $("run-note").textContent = connected ? "Rewrite, render, measure, and review. Export unlocks when the checks pass." : "Built-in examples are available offline. Connect a local model for original wording.";
   inline("model-status", "");
 }
 
@@ -140,7 +150,7 @@ function renderProfileSummary(profile) {
   scratch.drafts = scratch.drafts.filter(idea => currentRoles.has(idea.roleKey));
   renderIdeas();
   renderFacts(profile);
-  $("run-button").disabled = state.busy || state.importing;
+  updateActions();
 }
 
 function roleName(roleId) {
@@ -162,6 +172,7 @@ function renderFacts(profile) {
         const latest = readProfile();
         latest.facts = (latest.facts || []).filter((item) => item.id !== fact.id);
         populateProfile(latest);
+        sourceChanged();
         message("Fact removed from the source profile. Rebuild to update the PDF.");
       } catch (error) { message(error.message, true); }
     });
@@ -179,12 +190,7 @@ function recordVerifiedFact(profile, roleId, text) {
   }
   profile.facts.push({ id: `fact-${crypto.randomUUID()}`, text, role_id: roleId, confirmed: true });
   populateProfile(profile);
-  if (state.result) {
-    setDownload(null);
-    $("result-badge").textContent = "Source changed";
-    $("result-badge").className = "status-badge warning";
-    $("export-note").textContent = "Build again to include the new verified experience.";
-  }
+  sourceChanged();
 }
 
 function addFact() {
@@ -301,7 +307,7 @@ async function generateIdeas() {
 function setBusy(busy, progress = "Building your document…") {
   state.busy = busy;
   renderIdeas();
-  $("run-button").disabled = busy || !state.profile;
+  updateActions();
   $("apply-review").disabled = busy;
   $("apply-plan").disabled = busy;
   $("source-file").disabled = busy;
@@ -311,7 +317,7 @@ function setBusy(busy, progress = "Building your document…") {
     $("result-badge").textContent = "Checking the page";
     $("result-badge").className = "status-badge neutral";
     setDownload(null);
-    $("export-note").textContent = "A new version is being checked. Your previous preview stays visible.";
+    $("export-note").textContent = "Checking the current draft…";
   }
 }
 
@@ -365,10 +371,138 @@ function claimProblem(claim) {
   return "";
 }
 
+function analysisInput() {
+  return JSON.stringify([$("job-description").value.trim(), $("profile-json").value,
+    $("provider").value, $("base-url").value, $("model-name").value, $("strategy").value]);
+}
+
+function updateActions() {
+  const waiting = state.busy || state.importing || analyzing;
+  const job = $("job-description").value.trim();
+  const reviewFirst = job && analysisKey !== analysisInput();
+  $("run-label").textContent = reviewFirst ? "Analyze posting" : "Build & inspect PDF";
+  $("analyze-job").disabled = !job || !state.profile || waiting;
+  $("run-button").disabled = !state.profile || waiting;
+  $("apply-examples").disabled = waiting;
+}
+
+function invalidateAnalysis(changePosting = false) {
+  if (changePosting && priorityJob !== null && priorityJob !== $("job-description").value.trim()) {
+    $("keywords").value = "";
+    priorityJob = null;
+    suggestedList = "";
+  }
+  analysisKey = null;
+  analysisRows = [];
+  $("analysis-detail").hidden = true;
+  inline("analysis-status", "");
+  updateActions();
+}
+
+function hideProof() {
+  setDownload(null);
+  $("pdf-preview").removeAttribute("src");
+  $("pdf-preview").hidden = true;
+  $("open-preview").removeAttribute("href");
+  $("open-preview").hidden = true;
+  $("preview-empty").hidden = false;
+  renderMetrics({});
+  $("results-section").hidden = true;
+}
+
+function invalidateOutput(keepPlan = false) {
+  revision++;
+  if (!state.result && !state.plan && !state.busy) return;
+  hideProof();
+  state.result = null;
+  if (!keepPlan) { renderPlan(null); renderExamples({}); }
+  $("result-badge").textContent = "Draft changed";
+  $("result-badge").className = "status-badge warning";
+  $("export-note").textContent = keepPlan ? "Apply your edits to check the updated PDF." : "Build again to check this draft.";
+}
+
+function sourceChanged() {
+  invalidateOutput();
+  invalidateAnalysis();
+}
+
+function showAnalysis(rows) {
+  analysisRows = rows;
+  const labels = {exact: "Exact source match", related: "Related source evidence", missing: "Missing from source"};
+  $("analysis-list").replaceChildren(...rows.map(row => node("li", "", `${row.term} · ${labels[row.evidence] || "Unknown"}. ${row.rationale}`)));
+  $("analysis-detail").hidden = !rows.length;
+  analysisKey = analysisInput();
+  priorityJob = $("job-description").value.trim();
+  inline("analysis-status", rows.length ? "Review the priorities below, then build when ready." : "Add your priorities below or build with the list empty.", "success");
+  updateActions();
+}
+
+async function analyzePosting() {
+  if (state.busy || state.importing || analyzing) return;
+  const job = $("job-description").value.trim();
+  if (!job) { message("Paste a posting to analyze.", true); return; }
+  if (analysisKey === analysisInput()) {
+    $("analysis-detail").open = true;
+    $("keywords").focus();
+    return;
+  }
+  const key = analysisInput();
+  const previous = $("keywords").value;
+  const keepList = priorityJob === job && previous !== suggestedList;
+  try {
+    analyzing = true;
+    updateActions();
+    inline("analysis-status", "Reading posting…");
+    const requested = priorityJob === job ? [] : keywords();
+    const response = await api("/api/analyze", {profile: readProfile(), job_description: job, keywords: requested, settings: settings(true)});
+    if (key !== analysisInput()) return;
+    const rows = response.priorities;
+    if (!keepList && previous === $("keywords").value) {
+      suggestedList = [...new Set([...requested, ...rows.slice(0, 7).map(row => row.term)])].join("\n");
+      $("keywords").value = suggestedList;
+    }
+    showAnalysis(rows);
+    $("keywords").focus();
+    message("Your priority list is ready to review.");
+  } catch (error) {
+    inline("analysis-status", error.message, "error");
+  } finally {
+    analyzing = false;
+    updateActions();
+  }
+}
+
+function renderExamples(report, edits = {}) {
+  exampleEdits.clear();
+  const rows = report.inspiration_bullets || [];
+  exampleRows = rows;
+  $("example-section").hidden = !rows.length;
+  $("example-list").replaceChildren();
+  for (const item of rows) {
+    const label = node("label", "", roleName(item.role_id));
+    const field = node("textarea");
+    if (typeof edits[item.id] === "string") exampleEdits.set(item.id, edits[item.id]);
+    field.value = exampleEdits.get(item.id) ?? item.text;
+    field.maxLength = 2000;
+    field.rows = 4;
+    field.addEventListener("input", () => {
+      exampleEdits.set(item.id, field.value.trim());
+      invalidateOutput(true);
+    });
+    label.append(field);
+    $("example-list").append(label);
+  }
+}
+
 async function startRun(usePlan = false, useClaimFields = true) {
-  if (state.busy || state.importing) return;
+  if (state.busy || state.importing || analyzing) return;
+  const startedAt = revision;
   try {
     const profile = readProfile();
+    if ($("job-description").value.trim() && analysisKey !== analysisInput()) {
+      await analyzePosting();
+      return;
+    }
     const plan = usePlan ? editedPlan(useClaimFields) : null;
     if (plan) {
       // Rebuild previously confirmed claims from the currently reviewed text and
@@ -377,30 +511,33 @@ async function startRun(usePlan = false, useClaimFields = true) {
       profile.facts = (profile.facts || []).filter((fact) => !confirmedFactIds.has(fact.id));
       plan.candidates = plan.candidates.filter((candidate) => !candidate.evidence_ids?.some((id) => confirmedFactIds.has(id)));
     }
-    const request = { profile, edit_request: $("edit-request").value, job_description: $("job-description").value.trim(), keywords: keywords(), settings: settings(), plan, confirmed_claim_ids: usePlan ? [...state.confirmed] : [] };
-    populateProfile(profile);
+    const request = { profile, edit_request: $("edit-request").value, job_description: $("job-description").value.trim(), keywords: keywords(), settings: settings(), plan, reviewed_priorities: analysisKey ? keywords() : null, draft_edits: usePlan ? Object.fromEntries(exampleEdits) : {}, confirmed_claim_ids: usePlan ? [...state.confirmed] : [] };
+    hideProof();
     message("");
-    setBusy(true, request.settings.provider === "none" ? "Rendering the source and measuring page fit…" : "Matching evidence, refining content, and measuring the page…");
+    setBusy(true, "Selecting accomplishments and measuring the page…");
     const result = await api("/api/run", request);
+    if (startedAt !== revision) { setBusy(false); return; }
     if (["running", "queued", "pending"].includes(result.status)) {
       if (!result.id) throw new Error("The server did not provide a run ID.");
-      pollRun(result.id);
+      pollRun(result.id, startedAt);
     } else finishRun(result);
-  } catch (error) { failRun(error); }
+  } catch (error) { if (startedAt === revision) failRun(error); else setBusy(false); }
 }
 
-async function pollRun(id, failures = 0) {
+async function pollRun(id, startedAt, failures = 0) {
   state.pollTimer = window.setTimeout(async () => {
     try {
       const result = await api(`/api/runs/${encodeURIComponent(id)}`);
+      if (startedAt !== revision) { setBusy(false); return; }
       if (["running", "queued", "pending"].includes(result.status)) {
         if (result.message) $("progress-text").textContent = result.message;
-        pollRun(id);
+        pollRun(id, startedAt);
       } else finishRun(result);
     } catch (error) {
+      if (startedAt !== revision) { setBusy(false); return; }
       if (failures < 3) {
         $("progress-text").textContent = "Reconnecting to the local server…";
-        pollRun(id, failures + 1);
+        pollRun(id, startedAt, failures + 1);
       } else failRun(error);
     }
   }, failures ? 3000 : 1200);
@@ -425,17 +562,18 @@ function localPath(value, fallback) {
 }
 
 function finishRun(result) {
+  if (result.status === "failed" && !result.report) {
+    failRun(new Error(result.error || result.message || "Build failed."));
+    return;
+  }
   setBusy(false);
   state.result = result;
-  // A confirmed proposal becomes a source fact. Subsequent plans can cite it.
-  if (result.profile?.facts?.some((fact) => fact.id.startsWith("confirmed:"))) {
-    try {
-      const profile = readProfile();
-      const facts = new Map((profile.facts || []).map((fact) => [fact.id, fact]));
-      for (const fact of result.profile.facts) if (fact.id.startsWith("confirmed:")) facts.set(fact.id, fact);
-      profile.facts = [...facts.values()];
-      populateProfile(profile);
-    } catch { /* Preserve user edits if they are currently incomplete JSON. */ }
+  if (result.profile) {
+    // The returned profile contains the user's explicit confirmations, including removals.
+    const wasAnalyzed = analysisKey === analysisInput();
+    populateProfile(result.profile);
+    if (wasAnalyzed) analysisKey = analysisInput();
+    updateActions();
   }
   const status = result.status || "failed";
   const report = result.report || {};
@@ -459,15 +597,16 @@ function finishRun(result) {
     $("open-preview").href = previewUrl;
     $("open-preview").hidden = false;
   }
-  const canExport = status === "ready" && report.geometry_passed !== false && report.quality_review?.passed !== false;
+  const canExport = status === "ready" && report.geometry_passed === true && report.quality_review?.passed === true;
   setDownload(canExport ? localPath(result.download_url, `/api/runs/${runId}/resume.pdf`) : null);
   $("export-note").textContent = canExport
-    ? (report.wording_policy === "verified" ? "Experience wording matches your verified sources. Check that the selection suits the job." : "Automated checks passed. Compare changed bullets with your source before submitting.")
+    ? (report.inspiration_bullets?.length ? "Generated examples are included. You can edit them above and refit the page." : report.wording_policy === "verified" ? "Experience wording matches your verified sources. Check that the selection suits the job." : "Automated checks passed. Compare changed bullets with your source before submitting.")
     : status === "needs_review" ? "Confirm accurate claims and rerun the checks to unlock export."
       : "Export is locked until content and layout checks pass.";
   renderMetrics(report);
   renderPlan(result.plan, report.confirmed_claim_ids || []);
   renderChanges(report);
+  renderExamples(report);
 }
 
 function finite(value) { return typeof value === "number" && Number.isFinite(value); }
@@ -484,7 +623,7 @@ function renderMetrics(report) {
     : "Content must fit one page and finish within the template’s bottom tolerance.";
   $("check-list").replaceChildren();
   const checks = [
-    ["One page", report.pages === 1],
+    ["One page", finite(report.pages) ? report.pages === 1 : undefined],
     ["Geometry", report.geometry_passed],
     [report.semantic_review === "source-preserving checks" ? "Source text checks" : "Content review", report.quality_review?.passed],
   ];
@@ -530,6 +669,7 @@ function renderPlan(plan, confirmedIds = []) {
       checkbox.checked = false;
       title.textContent = roleName(claim.role_id);
       syncClaimToPlan(claim.id, undefined, roleSelect.value);
+      invalidateOutput(true);
     });
     const textarea = node("textarea");
     textarea.value = claim.text;
@@ -542,6 +682,7 @@ function renderPlan(plan, confirmedIds = []) {
       state.confirmed.delete(claim.id);
       checkbox.checked = false;
       syncClaimToPlan(claim.id, textarea.value);
+      invalidateOutput(true);
     });
     const label = node("label", "check-label");
     const checkbox = node("input");
@@ -555,6 +696,7 @@ function renderPlan(plan, confirmedIds = []) {
         message(problem, true);
         return;
       }
+      invalidateOutput(true);
       if (checkbox.checked) state.confirmed.add(claim.id);
       else state.confirmed.delete(claim.id);
     });
@@ -595,7 +737,7 @@ function renderChanges(report) {
     $("change-list").append(card);
   }
   $("keyword-coverage").replaceChildren();
-  for (const [key, label, className] of [["matched", "Keywords present", "chip"], ["missing", "Keywords not present", "chip missing"]]) {
+  for (const [key, label, className] of [["matched", "Present in PDF", "chip"], ["related", "Related evidence in PDF", "chip"], ["missing", "Keywords not present", "chip missing"]]) {
     const terms = report.keyword_coverage?.[key] || [];
     if (!Array.isArray(terms) || !terms.length) continue;
     $("keyword-coverage").append(node("p", "coverage-label", label));
@@ -618,6 +760,7 @@ async function importFile(event) {
     if (file.size > 10 * 1024 * 1024) throw new Error("Choose a resume file no larger than 10 MiB.");
     const currentSettings = settings();
     state.importing = true;
+    updateActions();
     renderIdeas();
     $("source-file").disabled = true;
     $("run-button").disabled = true;
@@ -637,7 +780,7 @@ async function importFile(event) {
       $("idea-focus").value = "";
       inline("ideas-status", "");
       populateProfile(result.profile);
-      renderPlan(null);
+      sourceChanged();
       inline("import-status", `Imported ${file.name}. Review the source profile before building.`, "success");
       message("Source imported. Review the structured profile for extraction errors before building your PDF.");
     } else {
@@ -658,15 +801,14 @@ async function importFile(event) {
       $("import-status").after(details);
     }
     if (result.warnings?.length) inline("import-status", `${$("import-status").textContent} ${result.warnings.join(" ")}`);
-    setDownload(null);
-    $("export-note").textContent = "Source changed. Build a new version to enable export.";
+
   } catch (error) { inline("import-status", error.message, "error"); }
   finally {
     state.importing = false;
     renderIdeas();
     $("source-file").disabled = state.busy;
     $("source-file").value = "";
-    $("run-button").disabled = state.busy || !state.profile;
+    updateActions();
     $("apply-review").disabled = state.busy;
     $("apply-plan").disabled = state.busy;
   }
@@ -692,7 +834,12 @@ async function testModel() {
 
 function saveDraft() {
   try {
-    const value = { version: 1, profile: readProfile(), settings: settings(), edit_request: $("edit-request").value, job_description: $("job-description").value, keywords: $("keywords").value };
+    const value = { version: 2, profile: readProfile(), settings: settings(), edit_request: $("edit-request").value, job_description: $("job-description").value, keywords: $("keywords").value };
+    value.review = analysisKey === analysisInput() ? {rows: analysisRows, suggestedList} : null;
+    if (state.plan) {
+      value.editor = {plan: editedPlan(false), confirmed: [...state.confirmed],
+        examples: exampleRows, edits: Object.fromEntries(exampleEdits)};
+    }
     value.brainstorm = { role: $("idea-role").value, focus: $("idea-focus").value, drafts: scratch.drafts };
     // No API key field or credential is accepted or stored by the browser.
     localStorage.setItem(DRAFT_KEY, JSON.stringify(value));
@@ -707,19 +854,29 @@ async function bootstrap() {
   try {
     const data = await api("/api/bootstrap");
     populateSettings(data.settings);
-    if (data.settings?.model === "resumeforge-qwen35-4b") { $("use-laptop").hidden = false; $("use-laptop").onclick = () => { populateSettings(data.settings); message("Installed laptop model selected."); }; }
+    if (data.settings?.model === "resumeforge-qwen35-4b") { $("use-laptop").hidden = false; $("use-laptop").onclick = () => { populateSettings(data.settings); invalidateAnalysis(); invalidateOutput(); message("Installed laptop model selected."); }; }
     if (data.profile) populateProfile(data.profile);
     let draft;
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       draft = saved ? JSON.parse(saved) : null;
     } catch { message("The saved draft could not be read. The original source is loaded."); }
-    if (draft?.version === 1 && draft.profile?.name && Array.isArray(draft.profile.roles)) {
+    if ([1, 2].includes(draft?.version) && draft.profile?.name && Array.isArray(draft.profile.roles)) {
       populateProfile(draft.profile);
       populateSettings(draft.settings);
       $("edit-request").value = draft.edit_request || "";
       $("job-description").value = draft.job_description || "";
       $("keywords").value = draft.keywords || "";
+      if (draft.version === 2 && draft.job_description && draft.keywords) priorityJob = draft.job_description.trim();
+      if (draft.version === 2 && Array.isArray(draft.review?.rows)) {
+        suggestedList = draft.review.suggestedList ?? "";
+        showAnalysis(draft.review.rows);
+      }
+      if (draft.version === 2 && draft.editor?.plan && Array.isArray(draft.editor.examples)) {
+        renderPlan(draft.editor.plan, draft.editor.confirmed);
+        renderExamples({inspiration_bullets: draft.editor.examples}, draft.editor.edits);
+      }
+      updateActions();
       const savedIdeas = draft.brainstorm;
       if (Array.isArray(savedIdeas?.drafts)) {
         const roles = draft.profile.roles;
@@ -732,7 +889,7 @@ async function bootstrap() {
         renderIdeas();
       }
       updateJobCount();
-      message("Your saved browser draft is restored. Build a version to refresh its PDF preview.");
+      message(state.plan ? "Draft restored. Apply your saved edits to check the PDF." : "Draft restored. Build a version to refresh the PDF.");
     }
     if (!state.profile) {
       $("profile-name").textContent = "Import your source";
@@ -746,7 +903,21 @@ async function bootstrap() {
 }
 
 $("provider").addEventListener("change", updateProvider);
-$("job-description").addEventListener("input", updateJobCount);
+$("job-description").addEventListener("input", () => {
+  updateJobCount();
+  invalidateAnalysis(true);
+  invalidateOutput();
+});
+$("profile-json").addEventListener("input", sourceChanged);
+$("draft-mode").addEventListener("change", () => { $("grounded-options").hidden = $("draft-mode").value === "inspiration"; });
+$("analyze-job").addEventListener("click", analyzePosting);
+$("apply-examples").addEventListener("click", () => startRun(true));
+for (const id of ["provider", "base-url", "model-name", "strategy"]) {
+  $(id).addEventListener("input", () => { invalidateAnalysis(); invalidateOutput(); });
+}
+for (const id of ["keywords","edit-request","draft-mode","wording-policy","max-rounds","timeout","api-key-env"]) {
+  $(id).addEventListener("input", () => invalidateOutput());
+}
 $("source-file").addEventListener("change", importFile);
 $("test-model").addEventListener("click", testModel);
 $("run-button").addEventListener("click", () => startRun());
@@ -766,6 +937,7 @@ $("profile-json").addEventListener("change", () => {
 });
 $("plan-json").addEventListener("input", () => {
   // Any manual plan edit invalidates earlier confirmation. Review the exact new text.
+  invalidateOutput(true);
   state.confirmed.clear();
   for (const checkbox of $("claims-list").querySelectorAll('input[type="checkbox"]')) checkbox.checked = false;
 });

@@ -22,9 +22,27 @@ def _unit(s):
     if u in ('%','percent','percentage'):return '%'
     return u.rstrip('s')
 
+# An inclusive deadline and a strictly earlier deadline describe different results.
+_NUMBER_WORDS = {word: str(n) for n, word in enumerate(
+    ("zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve"))}
+_AMOUNT = r"(?:\d+(?:\.\d+)?|" + "|".join(_NUMBER_WORDS) + r")"
+_MEASURE = rf"({_AMOUNT})\s*(%|percent\b|seconds?|minutes?|hours?|days?|weeks?|months?|years?|tickets?|incidents?|releases?)"
+_INCLUSIVE = re.compile(rf"(?:<=|≤|\bat most\s+|\bno more than\s+|\bwithin\s+)\s*{_MEASURE}|{_MEASURE}\s+(?:or less|or fewer|or earlier)", re.I)
+_STRICT = re.compile(rf"(?:<(?![=])|\bunder\s+|\bless than\s+|\bfewer than\s+)\s*{_MEASURE}", re.I)
+
+def _bounds(pattern, text):
+    result = set()
+    for match in pattern.finditer(text.casefold()):
+        number, unit = (x for x in match.groups() if x is not None)
+        result.add((_NUMBER_WORDS.get(number, number), "%" if unit == "percent" else unit.rstrip("s")))
+    return result
+
 def comparative_issue(sources,claim):
     """Recognize endpoint-as-change and reversed ranges; no automatic new KPIs."""
     if any(claim==s for s in sources):return None
+    source = " ".join(sources)
+    if (_bounds(_STRICT, claim) - _bounds(_STRICT, source)) & _bounds(_INCLUSIVE, source):
+        return "The proposed strict upper bound excludes a value allowed by the cited result."
     pairs=[];explicit=[]
     for s in sources:
         for seg in re.split(r'[;!?]|\.(?=\s|$)',s):

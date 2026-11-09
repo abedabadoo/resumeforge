@@ -1,2 +1,2 @@
 """ResumeForge: evidence-aware tailoring with fixed-geometry PDF layout."""
-__version__ = "0.3.0"
+__version__ = "0.4.0"

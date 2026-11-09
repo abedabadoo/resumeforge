@@ -6,11 +6,11 @@ A native Windows desktop app for tailoring a resume and saving a checked PDF. A 
 
 ## Install on Windows
 
-Download **ResumeForge-Setup-x64.exe** from the [Windows desktop release](https://github.com/abedabadoo/resumeforge/releases/tag/v0.3.0) while signed in to the private repository. Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs.
+Download **ResumeForge-Setup-x64.exe** from the [Windows desktop release](https://github.com/abedabadoo/resumeforge/releases/tag/v0.4.0). Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs.
 
-Start with your preloaded resume, paste a posting, then choose **Build resume**. The right pane previews the generated PDF. **Save checked PDF** becomes available after the writing and layout checks pass. **Bullet ideas** provides fictional examples you can turn into verified facts.
+A fresh public install opens a fictional demo profile. An upgrade opens your previously saved workspace. Import your resume or open your existing profile, then choose **Analyze job description** to see the posting’s ranked priorities.
 
-The first launch works with source wording. For AI rewrites, start a local model service on your PC. Open **Model settings**, select **Ollama** or **OpenAI-compatible endpoint**, enter the service URL, and choose **Find installed models** or enter its model name. The PC model is a separate installation. Your workspace, generated previews, and run reports are stored under `%LOCALAPPDATA%\ResumeForge\workspace`.
+The first launch can build with offline examples. To generate new wording with Qwen, start your local model service on your PC. Open **Model settings**, select **Ollama** or **OpenAI-compatible endpoint**, enter the service URL, and choose **Find installed models** or enter its model name. The PC model is a separate installation. Your workspace, generated previews, and run reports are stored under `%LOCALAPPDATA%\ResumeForge\workspace`.
 
 For development from a Windows source checkout with Python installed, run **Launch ResumeForge on Windows.cmd**. To recreate the downloadable installer, run `python tools/windows/build.py --work dist/build --out dist/windows` with Go and NSIS available. `tools/windows/runtime-lock.json` records the downloads and SHA-256 hashes.
 
@@ -28,15 +28,13 @@ If port 8766 is occupied, run `python -m resumeforge serve --port 8767 --open` u
 
 ## Use it
 
-1. The supplied resume is preloaded as a checked structured profile. Import a PDF/DOCX to inspect another source. Generic AI-assisted import requires a model; without one, extracted text is available for manual profile mapping. Review job assignments and extracted fields before generation.
-2. Paste the posting, then enter your own editing instructions and optional priority keywords in their separate fields.
-3. The installed laptop model is preselected on a fresh workspace. A previously saved draft can restore its prior settings. Select the sequential workflow under Engine settings, or choose **No model · layout only** to exercise the renderer using original bullets and confirmed facts.
-4. For a starting point, open **Brainstorm bullet ideas**, choose the job from your resume, and optionally describe a topic. You get editable fictional accomplishments with example tools, details, and numbers. Replace them with what actually happened (or remove a number you did not measure), confirm your corrected wording, and add it as experience. Generating ideas alone does not change a resume, even in the normal rewriting workflow. You can also add role-specific experience directly under **Add verified experience**. Only add work you can confirm. This gives the engine useful material beyond what is already on the one-page resume.
-5. Under **Experience wording**, choose **Generate tailored wording** for new prose or **Use only my verified wording** to rank and select exact statements from their original roles. In the latter mode, add your preferred alternative accomplishments as verified role facts; the Skills row can use existing profile labels only. Build and inspect the PDF, keyword coverage, changes, and measured fit.
-6. For proposed claims, select the correct job, replace questions with a complete factual accomplishment, then check the confirmation box. Unchecked proposals are excluded. Apply the reviewed edits to render and check again.
-7. Download becomes available when the one-page geometry and content checks pass. The preview remains available for a failed draft; it is not an approved export.
+1. Open your profile or import a resume. Generic PDF/DOCX import uses the configured model to map extracted text to the right jobs. You can also supply structured profile JSON.
+2. Paste the posting and choose **Analyze job description**. Review the ranked capabilities and their supporting evidence. ResumeForge distinguishes exact matches, related experience, and gaps. Add, remove, or reorder the priorities and give any editing instructions before building.
+3. **Generate new example achievements** is the default. It writes replacement bullets for relevant roles and can invent projects, tools, and numbers. Each example belongs to the current draft. The PDF prints it as ordinary resume prose. The app shows which bullets it generated. With the model disconnected, the editor draws on built-in examples.
+4. Choose **Build resume**. Use **Edit generated bullets** to change wording or clear an example, then refit the page. **Save checked PDF** exports the version shown in the preview after its page and content checks pass. For applications, replace invented claims with your actual experience.
+5. To work from your source alone, choose **Rewrite using my experience**, or choose **Use my verified wording** for exact source statements. You can add confirmed, role-specific experience to the profile separately.
 
-Skill selection can promote a requested technical term from confirmed role evidence into an existing Skills row, retain relevant source labels, and remove less relevant listed skills. A tool appearing only in a posting cannot establish experience. Personal strengths stay out of the technical skills list; the writing model can express a supported strength through a concrete accomplishment.
+The Skills row prioritizes both explicitly named tools and skills relevant to the broader capability. For example, cloud infrastructure can support retaining AWS and IaC, while Microsoft Azure alone does not establish Azure DevOps experience.
 
 Advanced editors expose the source profile and candidate plan as JSON. Editing the source is an assertion that its facts are accurate. Editing a candidate is subject to the same review checks as model writing. Save draft explicitly to retain the editable state in this browser.
 
@@ -44,11 +42,11 @@ Advanced editors expose the source profile and candidate plan as JSON. Editing t
 
 The template uses US Letter, 40-point margins, embedded Liberation Sans, 12-point body text with 13.2-point leading, 14-point section headings, and a 32-point name. It follows the supplied PDF's overall structure. Liberation Sans replaces the source's unembedded Helvetica with stable, distributable fonts. This is a controlled reconstruction, not a pixel-identical edit of arbitrary PDF objects. Dates, rules, bullet indents, and section spacing are fixed by the template.
 
-Each bullet has a stable slot and can have multiple complete wording alternatives. Alternatives cite source evidence from the same job. The optimizer measures the actual paragraphs that the renderer draws, considers omissions, preserves at least two bullets per job (or all available if fewer), and searches for a combination that fits. It accounts for font descenders, not just nominal line boxes. It prefers relevance and writing quality among sufficiently full combinations.
+Each bullet has a stable slot and can have multiple complete wording alternatives. Source-backed alternatives cite evidence from the same job. Generated examples have a distinct origin in the run report. The optimizer measures the actual paragraphs that the renderer draws, considers omissions, preserves at least two bullets per job (or all available if fewer), and searches for a combination that fits. It accounts for font descenders, not just nominal line boxes. It prefers relevance and writing quality among sufficiently full combinations.
 
 The target is **one page ending within 13.2 points of the fixed bottom boundary**, with no text outside the margins. Both text bounding boxes and content blocks are checked. The remaining physical bottom margin stays 40 points. The engine never changes font size, leading, tracking, or margins to force a fit.
 
-With AI enabled, a failed fit produces measured feedback and requests revised wording, up to the configured round limit. The selected text then receives a separate semantic review for fidelity, coherence, repetition, and stuffing. If content is insufficient, incoherent, or overflowing after the limit, export remains blocked. No amount of fitting can create truthful experience that is absent from the source.
+With AI enabled, a failed fit can request shorter or longer bullet alternatives based on measurements from the rendered page. The renderer selects the best completed pass within the configured round limit. Example drafts check page geometry, printable prose, and editing instructions. Source-backed rewrites also check evidence. Edited examples retain the exact wording you chose.
 
 The PDF is reopened to verify page count, text boundaries, exact selected-bullet text extraction, consistent font sizes, and bottom fill. `result.json` records the template fingerprint, PDF SHA-256, per-pass measurements, selected changes, and review result. Layout percentages describe page use, **not ATS matching**. Keyword presence is not a prediction of ranking or hiring outcomes.
 
@@ -67,7 +65,7 @@ If you deliberately configure a remote endpoint instead, that service receives t
 - Original input files are read without modification. Upload inspection is in memory.
 - Generated previews, checked PDFs, selected candidates, and run reports are stored in `.local-runs/` beside the source when using the launcher. These contain your resume content. You can choose a different folder with `--data-dir`.
 - Browser drafts use localStorage only after Save draft. Clear saved draft removes that browser copy, not generated files on disk.
-- The packaged example is your personal resume. Remove or replace both `examples/abu.profile.json` and `resumeforge/data/abu.profile.json` before distributing the app to other people.
+- Public Windows packages include a fictional starter. A personal build can set `--starter-profile path/to/profile.json`. Source checkouts use the profile under `resumeforge/data/`.
 - Documents and job postings are data, never executable instructions. The DOCX template's editing advice is not treated as resume evidence.
 
 ## Integrate with JobPilot
@@ -92,6 +90,7 @@ The local HTTP API exposes:
 |---|---|---|
 | GET | `/api/bootstrap` | Example profile and default settings |
 | GET | `/api/health` | App readiness |
+| POST | `/api/analyze` | Send `profile`, `job_description`, and optional `keywords` to get the ranked priorities and source evidence |
 | POST | `/api/ideas` | Return editable fictional bullet ideas for one role; does not create a run, edit evidence, or render a PDF |
 | POST | `/api/model-health` | ModelSettings JSON; inspect provider readiness |
 | POST | `/api/import` | `{filename, data_base64, settings}`; inspect/map a document |
@@ -102,7 +101,7 @@ The local HTTP API exposes:
 
 Use `Content-Type: application/json`. The local server accepts same-origin browser calls and local API clients; it is not a public hosting service. It serializes model/render jobs, limits the queue, rejects foreign browser origins, and does not log request bodies. Run IDs are kept in memory for the server session; reports and PDFs remain on disk after restart.
 
-`RunRequest` fields are `profile`, `job_description`, `edit_request`, `keywords`, `settings`, optional `plan`, and `confirmed_claim_ids`. Send `plan: null` for a fresh content plan; send the returned plan plus explicit confirmations to apply reviewed claims. A confirmed proposal becomes a role-specific fact in the returned profile. Retain that returned profile for later runs.
+Set `settings.draft_mode` to `inspiration` (default) or `grounded`. Set `settings.wording_policy` to `verified` for exact source text. Pass the ordered list from the priority review in `reviewed_priorities`. An empty list clears it. Refit edited examples by passing the returned `plan` and `draft_edits` mapping generated candidate IDs to their new text. An empty edit removes that example. Send `plan: null` for a fresh content plan; send the returned plan plus explicit confirmations to apply reviewed claims. A confirmed proposal becomes a role-specific fact in the returned profile. Retain that returned profile for later runs.
 
 ## CLI and development
 

@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QFileDialog, QLabel, QPlainTextEdit, QPushButton
 from pypdf import PdfReader
 
 from resumeforge import desktop_window
@@ -63,7 +63,16 @@ def check_builds(app, data_dir):
         build = widget(window, QPushButton, "buildButton")
         save = widget(window, QPushButton, "exportButton")
         preview = widget(window, QLabel, "pdfPreview")
-        assert build.isEnabled() and not save.isEnabled()
+        assert not build.isVisible() and not save.isEnabled()
+        window.job.setPlainText("DevOps Engineer with Claude Code CLI. Build agentic engineering harnesses, automate CI/CD pipelines, and provision infrastructure as code. Python is required.")
+        analyze = widget(window, QPushButton, "analyzeButton")
+        analyze.click()
+        wait_for(app, lambda: window.worker is None and build.isVisible(), "Job analysis did not pause for review")
+        assert window.result is None and not save.isEnabled()
+        priorities = window._keywords()
+        assert priorities and window.analysis_notes.toPlainText() and window.brief.toPlainText()
+        assert window.policy.currentData() == "inspiration"
+        window.keywords.setPlainText("\n".join(["CI/CD pipelines", *[k for k in priorities if k != "CI/CD pipelines"]]))
         build.click()
         wait_for(app, lambda: window.result is not None and save.isEnabled(),
                  "Default profile did not produce an export-ready page")
@@ -78,7 +87,36 @@ def check_builds(app, data_dir):
         assert hashlib.sha256(target.read_bytes()).hexdigest() == window.result["report"]["pdf_sha256"]
         reader = PdfReader(target)
         assert len(reader.pages) == 1 and reader.pages[0].extract_text().strip()
-        print("Default profile produced a native PDF preview and a matching one-page searchable export.")
+        bullets = window.result["report"].get("inspiration_bullets", [])
+        assert bullets and window.edit_bullets_button.isVisible()
+        assert window.profile == Profile.model_validate(window.result["profile"])
+        pdf_text = " ".join(reader.pages[0].extract_text().split())
+        assert " ".join(bullets[0]["text"].split()) in pdf_text
+        assert "fictional" not in pdf_text.lower() and "example achievement" not in pdf_text.lower()
+        print("Reviewing the priorities produced new bullets, a native PDF preview and a matching one-page export.")
+
+        previous = window.run_dir
+        def revise_generated():
+            dialog = app.activeModalWidget()
+            editor = dialog.findChild(QPlainTextEdit, "generatedBulletText")
+            # Change one word to verify the generated text can be edited without a model.
+            words = editor.toPlainText().split(" ", 1)
+            editor.setPlainText(("Delivered" if words[0] != "Delivered" else "Built") + " " + words[1])
+            buttons = dialog.findChild(QDialogButtonBox)
+            buttons.button(QDialogButtonBox.StandardButton.Ok).click()
+        QTimer.singleShot(0, revise_generated)
+        window.edit_bullets_button.click()
+        wait_for(app, lambda: bool(window.result) and window.run_dir != previous and save.isEnabled(),
+                 "Edited examples were not refit and approved for export")
+        revised = window.result["report"]["inspiration_bullets"]
+        assert any(b["id"] == bullets[0]["id"] and b["text"] != bullets[0]["text"] for b in revised)
+        assert not any(f.text == revised[0]["text"] for f in window.profile.facts)
+        assert window.save_workspace()
+        restored = desktop_window.MainWindow(data_dir)
+        assert restored.result and restored._can_export()
+        assert restored.result["report"]["inspiration_bullets"] == revised
+        restored.close()
+        print("Generated bullets were edited and refit, then restored from the saved workspace.")
 
         sparse = Profile(
             name="Test Candidate",
@@ -89,6 +127,10 @@ def check_builds(app, data_dir):
         window.set_profile(sparse)
         assert not save.isEnabled(), "Changing the source left an earlier export enabled"
         previous = window.run_dir
+        window.job.setPlainText("")
+        analyze.click()
+        wait_for(app, lambda: window.worker is None and build.isVisible(), "Unable to review new source")
+        window.policy.setCurrentIndex(window.policy.findData("verified"))
         build.click()
         wait_for(app, lambda: bool(window.result) and window.run_dir != previous and
                  window.result.get("status") == "needs_content",

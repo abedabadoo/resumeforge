@@ -24,7 +24,7 @@ def merge_plans(old: Plan, new: Plan) -> Plan:
                 proposed_claims=list(claims.values()), notes=list(dict.fromkeys(old.notes+new.notes)))
 
 
-def validate_plan(profile, plan):
+def validate_plan(profile, plan, *, inspiration=False):
     evidence = profile.evidence()
     roles = {r.id for r in profile.roles}
     slots = {b.id: r.id for r in profile.roles for b in r.bullets}
@@ -36,6 +36,10 @@ def validate_plan(profile, plan):
         ids.add(c.id)
         if c.role_id not in roles or slots.get(c.slot_id) != c.role_id:
             raise ValueError("Candidate role/slot does not match the profile: " + c.id)
+        if c.origin != "source":
+            if not inspiration or c.evidence_ids or c.parts or not c.id.startswith("idea:"):
+                raise ValueError("An inspiration bullet must be a draft example without evidence citations.")
+            continue
         if not c.evidence_ids or any(i not in evidence or evidence[i].role_id != c.role_id for i in c.evidence_ids):
             raise ValueError("Candidate must cite evidence from the same job: " + c.id)
         if any(not evidence[i].confirmed for i in c.evidence_ids):
@@ -72,7 +76,36 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
     profile = request.profile.model_copy(deep=True)
     progress("Ranking keywords and preparing content alternatives")
     edit_options = {"edit_request":request.edit_request} if request.edit_request else {}
-    plan = request.plan.model_copy(deep=True) if request.plan else build_plan(profile, request.job_description, request.keywords, request.settings, **edit_options)
+    if request.reviewed_priorities is not None:
+        edit_options["reviewed_priorities"] = request.reviewed_priorities
+    inspiration = (request.settings.draft_mode == "inspiration" and request.settings.wording_policy != "verified"
+                   and bool(request.job_description.strip() or request.keywords or request.reviewed_priorities
+                            or (request.plan and any(c.origin != "source" for c in request.plan.candidates))))
+    if request.draft_edits and (not inspiration or request.plan is None):
+        raise ValueError("Draft edits require an inspiration plan.")
+    if request.plan is not None:
+        plan = request.plan.model_copy(deep=True)
+        if not inspiration:
+            plan.candidates = [c for c in plan.candidates if c.origin == "source"]
+    elif inspiration:
+        from .inspiration import add_examples
+        # Gather and rank actual source material first. The writing model receives
+        # a different task here: invent an accomplishment for each targeted slot.
+        if request.reviewed_priorities is None and request.settings.provider != "none" and request.job_description.strip():
+            from .job_analysis import analyze_posting
+            rows = analyze_posting(profile, request.job_description, request.keywords, request.settings)
+            edit_options["reviewed_priorities"] = [row["term"] for row in rows[:max(7, len(request.keywords))]]
+        baseline_settings = request.settings.model_copy(update={"provider": "none"})
+        plan = build_plan(profile, request.job_description, request.keywords, baseline_settings, **edit_options)
+        plan.proposed_claims = []
+        plan.notes = [n for n in plan.notes if not n.startswith(("AI is disabled", "Original bullets"))]
+        progress("Writing new accomplishments for the highest-priority capabilities")
+        add_examples(profile, plan, request)
+    else:
+        plan = build_plan(profile, request.job_description, request.keywords, request.settings, **edit_options)
+    if request.draft_edits:
+        from .inspiration import apply_edits
+        apply_edits(plan, request.draft_edits)
     # A proposed accomplishment only becomes usable after explicit user confirmation.
     confirmations = set(request.confirmed_claim_ids)
     known = {p.id for p in plan.proposed_claims}
@@ -107,7 +140,7 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
     rounds = request.settings.max_rounds if request.settings.provider != "none" and not verified else 1
     for index in range(rounds):
         plan.candidates = [c for c in plan.candidates if c.id not in rejected]
-        validate_plan(profile, plan)
+        validate_plan(profile, plan, inspiration=inspiration)
         skills = selected_skills(profile,plan,request.settings,request.edit_request)
         progress(f"Measuring bullet alternatives and rendering page (pass {index+1}/{rounds})")
         from .edit_constraints import length_spec,unsupported_brief
@@ -115,11 +148,15 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         blocked=unsupported_brief(profile,request.edit_request) or ambiguous
         fit_plan=plan
         required_slots=frozenset()
+        if inspiration:
+            from .inspiration import printable_plan, draft_skills
+            fit_plan, required_slots = printable_plan(plan)
+            skills = draft_skills(profile, fit_plan, skills)
         if length and not blocked:
-            options=[c for c in plan.candidates if c.slot_id!=length.slot or length.allows(c.text)]
+            options=[c for c in fit_plan.candidates if c.slot_id!=length.slot or length.allows(c.text)]
             if any(c.slot_id==length.slot and not c.needs_confirmation for c in options):
-                fit_plan=plan.model_copy(update={'candidates':options})
-                required_slots=frozenset([length.slot])
+                fit_plan=fit_plan.model_copy(update={'candidates':options})
+                required_slots=required_slots | {length.slot}
             else:
                 blocked=f'No admissible {length.direction} version of {length.slot} is available. Generate a grounded alternative.'
         if verified:
@@ -132,26 +169,32 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if blocked:
             from .models import Review
             review=Review(passed=False,issues=[blocked])
+        elif inspiration:
+            from .inspiration import check_draft
+            review = check_draft(profile, selection.selected, request.settings)
         else:
             review = review_content(profile, selection.selected, request.settings)
         if review.passed and request.edit_request:
             from .laptop import check_request
-            review = check_request(request,selection.selected,skills)
+            review = check_request(request,selection.selected,skills, inspiration=True) if inspiration else check_request(request,selection.selected,skills)
         report["edit_request"] = request.edit_request
         report["strategy"] = request.settings.strategy
         report["wording_policy"] = request.settings.wording_policy
+        report["draft_mode"] = "inspiration" if inspiration else "grounded"
+        report["priorities"] = [k.term for k in plan.keywords]
+        report["inspiration_bullets"] = [c.model_dump(include={"id","role_id","slot_id","text","keywords","origin"})
+                                          for c in selection.selected if c.origin != "source"]
         report["quality_review"] = review.model_dump()
         report["warnings"] = list(dict.fromkeys(plan.notes + selection.warnings))
         report["warnings"] += ["Unconfirmed proposed claims are excluded from this PDF."] if any(p.id not in confirmations for p in plan.proposed_claims) else []
         report["model_used"] = request.settings.model if request.settings.provider != "none" else None
         report["semantic_review"] = "model-assisted" if request.settings.provider != "none" else "source-preserving checks"
+        if inspiration:
+            report["semantic_review"] = "Source evidence checked separately from example wording"
         report["skills"] = skills
         report["confirmed_claim_ids"] = sorted(confirmations)
-        text = " ".join([c.text for c in selection.selected] + skills)
-        report["keyword_coverage"] = {
-            "matched": [k.term for k in plan.keywords if keyword_matches(text,k.term)],
-            "missing": [k.term for k in plan.keywords if not keyword_matches(text,k.term)],
-            "description": "Literal/alias keyword coverage, not an ATS score or a hiring prediction."}
+        from .planning import keyword_coverage
+        report["keyword_coverage"] = keyword_coverage(plan.keywords, selection.selected, skills)
         changes = []
         for role in profile.roles:
             for bullet in role.bullets:
@@ -177,6 +220,12 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if unsupported_brief(profile,request.edit_request) or ambiguous:
             break # Unchanged fixed template or ambiguous instructions cannot be repaired by padding.
         if index + 1 < rounds:
+            if inspiration:
+                from .example_refit import refit_examples
+                progress("Refining example wording using the measured page fit")
+                if not refit_examples(request, plan, selection, report, review):
+                    break
+                continue
             rejected.update(c.id for c in selection.selected if not c.id.startswith('original:') and any(issue.startswith(c.id+':') for issue in review.issues))
             feedback = json.dumps({"layout": {k:report[k] for k in ("bottom_gap_pt","ink_bottom_gap_pt","target_bottom_gap_pt","issues")},
                                    "quality": review.model_dump(), "selected": [c.model_dump() for c in selection.selected],

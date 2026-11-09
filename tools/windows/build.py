@@ -128,6 +128,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--work", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--starter-profile", type=Path, default=HERE / "demo.profile.json",
+                    help="Profile to show in a new workspace. The default is a fictional sample.")
     ap.add_argument("--go", default=shutil.which("go"))
     ap.add_argument("--makensis", default=shutil.which("makensis"))
     args = ap.parse_args()
@@ -149,8 +151,12 @@ def main():
                 raise ValueError(f"Unexpected download: {package}")
             unpack(package, lib if wheel else runtime, wheel=wheel)
         (runtime / "python313._pth").write_text("python313.zip\n.\nLib/site-packages\nimport site\n", encoding="ascii")
-        shutil.copytree(PROJECT / "resumeforge", lib / "resumeforge",
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+        # Use the same seed location as the editor and importer, but never
+        # include other profiles from the developer's source tree.
+        app = lib / "resumeforge"
+        shutil.copytree(PROJECT / "resumeforge", app,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.profile.json"))
+        shutil.copyfile(args.starter_profile, app / "data" / "abu.profile.json")
         shutil.copytree(PROJECT / "licenses", runtime / "licenses")
         if (HERE / "licenses").is_dir():
             shutil.copytree(HERE / "licenses", runtime / "licenses", dirs_exist_ok=True)
@@ -165,7 +171,7 @@ def main():
         if args.makensis:
             setup = out / "ResumeForge-Setup-x64.exe"
             prefix = "/" if os.name == "nt" else "-"
-            subprocess.run([args.makensis, prefix + "V2", f"{prefix}DSTAGE_DIR={stage}",
+            subprocess.run([args.makensis, prefix + "V2", f"{prefix}DSTAGE_FILES={stage / '*'}",
                             f"{prefix}DOUT_FILE={setup}", str(HERE / "installer.nsi")], check=True)
             results.append(setup)
         for file in results:

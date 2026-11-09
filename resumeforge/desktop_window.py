@@ -1,6 +1,7 @@
 """Native desktop editor for the same engine used by the command-line interface."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import threading
@@ -10,7 +11,7 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit,
     QListWidget, QListWidgetItem, QMainWindow, QFileDialog, QMessageBox, QPlainTextEdit,
-    QProgressBar, QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget)
+    QProgressBar, QPushButton, QSplitter, QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
 from .desktop_preview import PagePreview, plain_label
 from .desktop_support import export_checked, load_draft, save_draft
@@ -19,6 +20,7 @@ from .ideas import IdeaRequest, brainstorm
 from .importing import MAX_BYTES, import_document
 from .local_runtime import default_settings
 from .models import ModelSettings, Plan, Profile, RunRequest
+from .planning import analyze_job
 
 
 class TaskSignals(QObject):
@@ -68,6 +70,9 @@ def role_text(role):
     return f"{role.title} · {role.company}"
 
 
+DEFAULT_BRIEF = "Give the highest-ranked priorities the most space in experience and skills."
+
+
 STYLE = """
 QMainWindow, QWidget#workspace { background: #f3f5f4; color: #192c2a; }
 QWidget#banner { background: #174b46; }
@@ -84,7 +89,7 @@ QLabel#hint, QLabel#modelStatus { color: #50665d; }
 QPushButton { padding: 7px 10px; border-radius: 4px; border: 1px solid #afc0b9; background: #ffffff; color: #21483c; }
 QPushButton:hover { border-color: #29705b; background: #edf5ef; }
 QPushButton:disabled { background: #eef1ef; border-color: #d6ddd9; color: #6e7974; }
-QPushButton#buildButton, QPushButton#exportButton:enabled { background: #196356; color: white; border: 1px solid #185d51; font-weight: bold; }
+QPushButton#analyzeButton, QPushButton#buildButton, QPushButton#exportButton:enabled { background: #196356; color: white; border: 1px solid #185d51; font-weight: bold; }
 QPushButton#buildButton:disabled { background: #dce6e2; color: #61736a; border-color: #cbd8d1; }
 QPlainTextEdit, QLineEdit, QListWidget, QComboBox { padding: 5px; border: 1px solid #b7c5be; border-radius: 4px; background: #ffffff; color: #152d23; selection-background-color: #236a57; selection-color: white; }
 QListWidget::item { padding: 4px; }
@@ -107,6 +112,8 @@ class MainWindow(QMainWindow):
                                                     "abu.profile.json").read_text(encoding="utf-8"))
         self.settings = default_settings()
         self.ideas = {}
+        self._analyzed_job = None
+        self._analysis = []
         self.result = None
         self.run_dir = None
         self._reviewed_plan = False
@@ -125,7 +132,9 @@ class MainWindow(QMainWindow):
         self._show_profile()
         self._restore()
         self._show_settings()
-        for item in (self.job, self.brief, self.keywords):
+        self._show_analyze_button()
+        self.job.textChanged.connect(self._posting_changed)
+        for item in (self.brief, self.keywords):
             item.textChanged.connect(self._input_changed)
         self.policy.currentIndexChanged.connect(self._input_changed)
         self.idea_topic.textChanged.connect(self._scratch_changed)
@@ -166,6 +175,11 @@ class MainWindow(QMainWindow):
         self.right = QTabWidget()
         self.preview = PagePreview()
         self.right.addTab(self.preview, "Source resume")
+        self.analysis_notes = QPlainTextEdit()
+        self.analysis_notes.setReadOnly(True)
+        self.analysis_notes.setObjectName("analysisNotes")
+        self.analysis_notes.setPlaceholderText("Analyze a job description to compare its requirements with the source resume.")
+        self.right.addTab(self.analysis_notes, "Job analysis")
         self.review_notes = QPlainTextEdit()
         self.review_notes.setReadOnly(True)
         self.review_notes.setObjectName("reviewNotes")
@@ -181,11 +195,14 @@ class MainWindow(QMainWindow):
         self.progress.hide()
         content.addWidget(self.progress)
         footer = QHBoxLayout()
-        self.status = plain_label("Ready to build.", "runStatus")
+        self.status = plain_label("Paste a job description to see its priorities.", "runStatus")
         footer.addWidget(self.status, 1)
         self.review_button = button("Review proposed claims…", "reviewButton", self.review_claims)
         self.review_button.hide()
         footer.addWidget(self.review_button)
+        self.edit_bullets_button = button("Edit generated bullets…", "editGenerated", self.edit_generated)
+        self.edit_bullets_button.hide()
+        footer.addWidget(self.edit_bullets_button)
         self.export_button = button("Save checked PDF…", "exportButton", self.export_pdf)
         self.export_button.setEnabled(False)
         footer.addWidget(self.export_button)
@@ -193,29 +210,46 @@ class MainWindow(QMainWindow):
         outer.addLayout(content, 1)
 
     def _tailor_tab(self):
+        self.steps = QStackedWidget()
+        intake = QVBoxLayout()
+        intake.setContentsMargins(16, 14, 16, 14)
+        intake.addWidget(plain_label("Target job", "sectionTitle"))
+        self.job = paragraph("jobDescription", "Paste the title, responsibilities, and qualifications.", 110)
+        field(intake, "Job description", self.job)
+        intake.setStretch(intake.indexOf(self.job), 1)
+        self.analyze_button = button("Analyze job description", "analyzeButton", self.analyze_posting)
+        intake.addWidget(self.analyze_button)
+        self.steps.addWidget(tab_page(intake))
+
         box = QVBoxLayout()
         box.setContentsMargins(16, 14, 16, 14)
-        box.addWidget(plain_label("Tailor your resume", "sectionTitle"))
-        self.job = paragraph("jobDescription", "Paste the responsibilities and qualifications for this job.", 100)
-        field(box, "Job description", self.job)
-        box.setStretch(box.indexOf(self.job), 3)
-        self.brief = paragraph("editRequest", "For example, emphasize cloud hardening and keep the audit result concise.", 52)
+        title = QHBoxLayout()
+        title.addWidget(plain_label("Review priorities", "sectionTitle"), 1)
+        self.back_button = button("Edit posting", "backToPosting", lambda: self.steps.setCurrentIndex(0))
+        title.addWidget(self.back_button)
+        box.addLayout(title)
+        self.keywords = paragraph("keywords", "Add one priority per line, highest first.", 78)
+        field(box, "Priority keywords · highest first", self.keywords)
+        box.setStretch(box.indexOf(self.keywords), 3)
+        self.brief = paragraph("editRequest", "Add any instructions for this job.", 46)
         field(box, "Editing instructions", self.brief)
         box.setStretch(box.indexOf(self.brief), 1)
-        self.keywords = QLineEdit()
-        self.keywords.setObjectName("keywords")
-        self.keywords.setPlaceholderText("AWS, Terraform, CI/CD")
-        field(box, "Priority keywords", self.keywords)
         self.policy = QComboBox()
         self.policy.setObjectName("wordingPolicy")
-        self.policy.addItem("Generate tailored wording", "rewrite")
-        self.policy.addItem("Use only my verified wording", "verified")
-        field(box, "Experience wording", self.policy)
+        self.policy.addItem("Generate new example achievements", "inspiration")
+        self.policy.addItem("Rewrite using my experience", "rewrite")
+        self.policy.addItem("Use my verified wording", "verified")
+        field(box, "Experience bullets", self.policy)
+        self.mode_hint = plain_label("", "hint")
+        box.addWidget(self.mode_hint)
+        self.policy.currentIndexChanged.connect(self._show_mode)
+        self._show_mode()
         self.model_label = plain_label("", "modelStatus")
         box.addWidget(self.model_label)
         self.build_button = button("Build resume", "buildButton", self.build_resume)
         box.addWidget(self.build_button)
-        return tab_page(box)
+        self.steps.addWidget(tab_page(box))
+        return self.steps
 
     def _experience_tab(self):
         box = QVBoxLayout()
@@ -282,18 +316,99 @@ class MainWindow(QMainWindow):
         self.profile = Profile.model_validate(profile)
         self.ideas = {}
         self._show_profile()
+        self._reset_analysis()
         self._input_changed()
-        self.status.setText("Source updated. Build a resume to check the new profile.")
+        self.status.setText("Source updated. Analyze the posting to compare it with this profile.")
 
     def _show_settings(self):
-        index = self.policy.findData(self.settings.wording_policy)
-        self.policy.setCurrentIndex(max(0, index))
-        self.policy.setItemText(self.policy.findData("rewrite"), "Use source wording (no model)" if
-                                self.settings.provider == "none" else "Generate tailored wording")
-        if self.settings.provider == "none":
-            self.model_label.setText("Using source wording. Connect a local model in Model settings for AI rewrites.")
-        else:
-            self.model_label.setText(f"Writing model: {self.settings.model or self.settings.provider}")
+        mode = ("verified" if self.settings.wording_policy == "verified" else
+                "inspiration" if self.settings.draft_mode == "inspiration" else "rewrite")
+        self.policy.setCurrentIndex(self.policy.findData(mode))
+        self.policy.setItemText(self.policy.findData("rewrite"),
+                                "Use source experience" if self.settings.provider == "none"
+                                else "Rewrite using my experience")
+        self.model_label.setText("Offline · no model connected" if self.settings.provider == "none"
+                                 else f"Writing model: {self.settings.model or self.settings.provider}")
+
+    def _show_mode(self, *_):
+        self.mode_hint.setText({
+            "inspiration": "New bullets can contain invented experience and numbers. You can edit them after building.",
+            "rewrite": "Tailor the resume using accomplishments from your source profile.",
+            "verified": "Choose from statements you have already verified.",
+        }[self.policy.currentData()])
+
+    def _reset_analysis(self):
+        self._analyzed_job = None
+        self._analysis = []
+        self.keywords.clear()
+        self.analysis_notes.clear()
+        self.steps.setCurrentIndex(0)
+        self.right.setCurrentIndex(0)
+
+    def _show_analyze_button(self):
+        self.analyze_button.setText("Analyze job description" if self.job.toPlainText().strip() else "Continue without a posting")
+
+    def _posting_changed(self):
+        self._show_analyze_button()
+        self._reset_analysis()
+        self._input_changed()
+        self.status.setText("Analyze the posting to review its priorities.")
+
+    def analyze_posting(self):
+        if self.worker is not None:
+            return
+        job = self.job.toPlainText().strip()
+        if len(job) > 40000:
+            self.status.setText("Use a job description of 40,000 characters or fewer.")
+            return
+        if self._analyzed_job == job:
+            self.steps.setCurrentIndex(1)
+            self.right.setCurrentWidget(self.analysis_notes)
+            return
+        profile = self.profile.model_copy(deep=True)
+        existing = self._keywords()
+        from .job_analysis import analyze_posting
+        settings = self._current_settings()
+        self._start("Reading job requirements…",
+                    lambda progress: analyze_posting(profile, job, existing, settings) if job or existing else [],
+                    lambda findings: self._finish_analysis(job, findings, existing))
+
+    def _finish_analysis(self, job, findings, existing):
+        self._analyzed_job = job
+        self._analysis = findings
+        self._dirty = True
+        terms = list(dict.fromkeys([*existing, *(item["term"] for item in findings[:7])]))
+        self.keywords.setPlainText("\n".join(terms))
+        if terms and not self.brief.toPlainText().strip():
+            self.brief.setPlainText(DEFAULT_BRIEF)
+        self._show_analysis()
+        self.steps.setCurrentIndex(1)
+        if findings:
+            self.right.setCurrentWidget(self.analysis_notes)
+        self.status.setText("Edit the priority list, then build when ready.")
+
+    def _show_analysis(self):
+        if not self._analysis:
+            self.analysis_notes.setPlainText("No requirements identified. You can enter your own priorities.")
+            return
+        evidence_names = {"exact": "Exact source match", "related": "Related source evidence", "missing": "Missing from source"}
+        lines = []
+        sources = self.profile.evidence()
+        for index, item in enumerate(self._analysis, 1):
+            lines.append(f"{index}. {item['term']}   ·   {evidence_names[item['evidence']]}")
+            if item.get("rationale"):
+                lines.append(item["rationale"])
+            if item.get("posting_quote"):
+                lines.append(f'From the posting: “{item["posting_quote"]}”')
+            if item.get("exact_skills"):
+                lines.append("Skills: " + ", ".join(item["exact_skills"]))
+            if item.get("related_skills"):
+                lines.append("Related skills: " + ", ".join(item["related_skills"]))
+            excerpt = next((sources[key].text for key in item.get("evidence_ids", []) if key in sources), None)
+            if excerpt:
+                lines.append(f'From your resume: “{excerpt}”')
+            lines.append("")
+        self.analysis_notes.setPlainText("\n".join(lines).strip())
 
     def _show_ideas(self, *_):
         self.idea_list.clear()
@@ -306,8 +421,9 @@ class MainWindow(QMainWindow):
 
     def _refresh_after_fact(self):
         self._show_profile()
+        self._reset_analysis()
         self._input_changed()
-        self.status.setText("Experience updated. Build a resume to include the change.")
+        self.status.setText("Experience updated. Analyze the posting against the updated profile.")
 
     def _scratch_changed(self, *_):
         self._dirty = True
@@ -318,6 +434,7 @@ class MainWindow(QMainWindow):
             self.result = None
             self.run_dir = None
             self.review_button.hide()
+            self.edit_bullets_button.hide()
             self.export_button.setEnabled(False)
             self.right.setTabText(0, "Source resume")
             self.preview.show_source(self.profile)
@@ -325,15 +442,19 @@ class MainWindow(QMainWindow):
             self.status.setText("Inputs changed. Build again to check this version.")
 
     def _current_settings(self):
-        return self.settings.model_copy(update={"wording_policy": self.policy.currentData()})
+        mode = self.policy.currentData()
+        return self.settings.model_copy(update={"wording_policy": "verified" if mode == "verified" else "rewrite",
+                                                "draft_mode": "inspiration" if mode == "inspiration" else "grounded"})
 
     def _keywords(self):
-        return list(dict.fromkeys(part.strip() for part in re.split(r"[,;\n]", self.keywords.text()) if part.strip()))
+        return list(dict.fromkeys(part.strip() for part in re.split(r"[,;\n]", self.keywords.toPlainText()) if part.strip()))
 
     def _snapshot(self):
-        return {"version": 1, "profile": self.profile.model_dump(),
+        return {"version": 2, "analyzed": self._analyzed_job is not None,
+                "last_run": self.run_dir.name if self.result and self.run_dir else None,
+                "profile": self.profile.model_dump(),
                 "settings": self._current_settings().model_dump(), "job_description": self.job.toPlainText(),
-                "edit_request": self.brief.toPlainText(), "keywords": self.keywords.text(),
+                "edit_request": self.brief.toPlainText(), "keywords": self.keywords.toPlainText(),
                 "ideas": self.ideas, "idea_role": self.idea_role.currentData(), "idea_topic": self.idea_topic.text()}
 
     def _restore(self):
@@ -341,7 +462,7 @@ class MainWindow(QMainWindow):
             draft = load_draft(self.data_dir)
             if not draft:
                 return
-            if draft.get("version") != 1:
+            if draft.get("version") not in (1, 2):
                 raise ValueError("Unsupported saved-workspace version.")
             profile = Profile.model_validate(draft["profile"])
             settings = ModelSettings.model_validate(draft["settings"])
@@ -354,12 +475,23 @@ class MainWindow(QMainWindow):
             self._show_profile()
             self.job.setPlainText(draft.get("job_description", ""))
             self.brief.setPlainText(draft.get("edit_request", ""))
-            self.keywords.setText(draft.get("keywords", ""))
+            self.keywords.setPlainText(draft.get("keywords", ""))
             self.idea_topic.setText(draft.get("idea_topic", ""))
             idx = self.idea_role.findData(draft.get("idea_role"))
             if idx >= 0:
                 self.idea_role.setCurrentIndex(idx)
             self.status.setText("Saved workspace restored.")
+            if draft.get("analyzed"):
+                self._analyzed_job = self.job.toPlainText().strip()
+                self._analysis = analyze_job(profile, self._analyzed_job) if self._analyzed_job else []
+                self._show_analysis()
+                self.steps.setCurrentIndex(1)
+            last_run = draft.get("last_run") or ""
+            if re.fullmatch(r"[0-9a-f]{32}", last_run):
+                folder = self.data_dir / "runs" / last_run
+                if (folder / "result.json").is_file() and (folder / "preview.pdf").is_file():
+                    result = json.loads((folder / "result.json").read_text(encoding="utf-8"))
+                    self.render_result(result, folder)
         except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
             self.status.setText(f"Could not restore the saved workspace: {exc}")
 
@@ -394,7 +526,7 @@ class MainWindow(QMainWindow):
 
     def _set_busy(self, busy):
         for widget in (self.left, self.import_button, self.settings_button,
-                       self.save_button, self.review_button):
+                       self.save_button, self.review_button, self.edit_bullets_button):
             widget.setEnabled(not busy)
         self.progress.setVisible(busy)
         self.export_button.setEnabled(not busy and self._can_export())
@@ -423,38 +555,42 @@ class MainWindow(QMainWindow):
     def _failed(self, message):
         self.worker, self._on_success = None, None
         self._set_busy(False)
-        self.status.setText(message or "The operation could not be completed.")
+        status = message or "The operation could not be completed."
+        if self.result:
+            status += " The previous build is still open."
+        self.status.setText(status)
 
     def build_resume(self):
+        if self._analyzed_job != self.job.toPlainText().strip() or self.steps.currentIndex() != 1:
+            self.analyze_posting()
+            return
         self._build()
 
-    def _build(self, plan=None, confirmations=None):
+    def _build(self, plan=None, confirmations=None, draft_edits=None):
         if self.worker is not None:
             return
         try:
             profile = self.profile.model_copy(deep=True)
-            if plan is not None:
+            if plan is not None and confirmations is not None:
                 # Reconfirmations replace the previous versions from this plan.
                 confirmed = {"confirmed:" + p.id for p in plan.proposed_claims}
                 profile.facts = [f for f in profile.facts if f.id not in confirmed]
                 plan = plan.model_copy(deep=True)
                 plan.candidates = [c for c in plan.candidates if not set(c.evidence_ids) & confirmed]
+            brief = self.brief.toPlainText().strip()
             request = RunRequest(profile=profile, settings=self._current_settings(),
-                                 job_description=self.job.toPlainText(), edit_request=self.brief.toPlainText(),
-                                 keywords=self._keywords(), plan=plan, confirmed_claim_ids=confirmations or [])
+                                 job_description=self.job.toPlainText(), edit_request="" if brief == DEFAULT_BRIEF else brief,
+                                 reviewed_priorities=self._keywords(), plan=plan, confirmed_claim_ids=confirmations or [],
+                                 draft_edits=draft_edits or {})
         except ValueError as exc:
             self.status.setText(str(exc))
             return
         folder = self.data_dir / "runs" / uuid4().hex
-        self.result, self.run_dir = None, None
-        self._reviewed_plan = plan is not None
-        self.export_button.setEnabled(False)
-        self.review_button.hide()
-        self.review_notes.clear()
-        self.right.setTabText(0, "Source resume")
-        self.preview.show_source(self.profile)
-        self._start("Building the resume…", lambda progress: run(request, folder, progress),
-                    lambda result: self.render_result(result, folder))
+        def finished(result):
+            self._reviewed_plan = plan is not None
+            self.render_result(result, folder)
+
+        self._start("Building the resume…", lambda progress: run(request, folder, progress), finished)
 
     def render_result(self, result, run_dir):
         self.result = result
@@ -466,13 +602,17 @@ class MainWindow(QMainWindow):
             self._show_profile()
         report = result["report"]
         self.review_notes.setPlainText(self._format_review(report))
-        self.review_button.setVisible(bool(result.get("plan", {}).get("proposed_claims")))
+        bullets = report.get("inspiration_bullets", [])
+        self.edit_bullets_button.setVisible(bool(bullets))
+        self.review_button.setVisible(report.get("draft_mode") != "inspiration" and bool(result.get("plan", {}).get("proposed_claims")))
+        self._dirty = True
         self.export_button.setEnabled(bool(self._can_export()))
         labels = {"ready": "Checks passed. Review the PDF before submitting.",
-                  "needs_content": "More verified content or different wording is needed to fit the page.",
+                  "needs_content": "More content or different wording is needed to fit the page.",
                   "needs_review": "Content needs review. See Changes and checks."}
         status = labels.get(result["status"], "Review the checks.")
-        self.status.setText(f"{status}   •   {report.get('ink_bottom_gap_pt', 0):.1f} pt above bottom margin")
+        generated = f"   •   {len(bullets)} generated example bullet{'s' if len(bullets) != 1 else ''}" if bullets else ""
+        self.status.setText(f"{status}{generated}   •   {report.get('ink_bottom_gap_pt', 0):.1f} pt above bottom margin")
         try:
             self.preview.show_pdf(self.run_dir / "preview.pdf")
         except Exception as exc:
@@ -492,7 +632,9 @@ class MainWindow(QMainWindow):
         for heading, values in (
             ("Issues", list(report.get("issues", [])) + list(content.get("issues", []))),
             ("Suggestions", content.get("suggestions", [])),
-            ("Matched keywords", coverage.get("matched", [])), ("Missing keywords", coverage.get("missing", [])),
+            ("Exact matches in the PDF", coverage.get("matched", [])),
+            ("Related evidence in the PDF", coverage.get("related", [])),
+            ("Missing from the PDF", coverage.get("missing", [])),
             ("Review notes", report.get("warnings", [])),
         ):
             if values:
@@ -612,6 +754,16 @@ class MainWindow(QMainWindow):
             if self._append_fact(add_fact(self, self.profile, role, idea)):
                 batch.pop(index)
                 self._show_ideas()
+
+    def edit_generated(self):
+        if self.worker or not self.result:
+            return
+        from .desktop_dialogs import edit_generated_bullets
+        bullets = self.result["report"].get("inspiration_bullets", [])
+        updated = edit_generated_bullets(self, self.profile, bullets)
+        if updated:
+            self._build(plan=Plan.model_validate(self.result["plan"]),
+                        draft_edits=updated)
 
     def review_claims(self):
         from .desktop_dialogs import review_proposals

@@ -155,7 +155,7 @@ class Typesetter:
         return blocks
 
     def fit(self, profile: Profile, plan: Plan, skills: list[str], required_slots=frozenset()) -> Selection:
-        from .planning import keyword_matches
+        from .planning import bullet_relevance
         fixed_blocks = self.blocks(profile, [], skills)
         fixed = sum(b.height for b in fixed_blocks)
         # Font descenders can extend beyond a Paragraph's nominal line box.
@@ -191,7 +191,7 @@ class Typesetter:
                 options = []
                 for c in variants:
                     h = round(sum(b.height+self.t.bullet_gap for b in self.bullet_blocks(c))*100)
-                    relevance = sum(k.weight for k in plan.keywords if keyword_matches(c.text, k.term))
+                    relevance = bullet_relevance(c.text, plan.keywords)
                     utility = 12 * c.quality + min(24, relevance * 1.8) + (1 if c.id.startswith("original:") else 0)
                     options.append((h, utility, c))
                 # A required editorial target cannot disappear to make its page fit.
