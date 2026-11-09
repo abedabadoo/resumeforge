@@ -1,0 +1,330 @@
+{
+  "pairs": [
+    {
+      "id": "train-supplier-workshop",
+      "split": "train",
+      "family": "attribution",
+      "source": "I prepared the agenda and recorded supplier feedback at a procurement workshop. The buyer facilitated the discussion.",
+      "good": "Prepared the agenda and documented supplier feedback for a buyer-led procurement workshop.",
+      "bad": "Prepared the agenda and led the supplier discussion at a procurement workshop."
+    },
+    {
+      "id": "train-taxonomy",
+      "split": "train",
+      "family": "attribution",
+      "source": "I owned the help center taxonomy redesign from kickoff through launch. Two editors helped me tag articles.",
+      "good": "Redesigned the help center taxonomy as project lead, working with two editors to tag articles.",
+      "bad": "Redesigned the help center taxonomy under an editor’s direction, helping tag articles."
+    },
+    {
+      "id": "train-audit",
+      "split": "train",
+      "family": "attribution",
+      "source": "For a stock audit I counted and reconciled all items in my assigned aisle. The warehouse supervisor reconciled the other aisles and signed the final inventory.",
+      "good": "Reconciled stock counts for an assigned aisle during the warehouse audit.",
+      "bad": "Reconciled stock counts for the entire warehouse and signed off on the audit."
+    },
+    {
+      "id": "train-cutover",
+      "split": "train",
+      "family": "attribution",
+      "source": "I made the go-live decision for the billing cutover and authorized the release. The shift engineer carried out my deployment plan.",
+      "good": "Directed the billing cutover and authorized the shift engineer to deploy the release.",
+      "bad": "Directed the billing cutover and personally deployed the release."
+    },
+    {
+      "id": "train-packing-demo",
+      "split": "train",
+      "family": "release_stage",
+      "source": "My barcode packing screen worked in a demo using dummy orders. We did not connect it to a warehouse or put it in service.",
+      "good": "Built a barcode packing screen and demonstrated it with simulated orders.",
+      "bad": "Built a barcode packing screen and deployed it for live warehouse orders."
+    },
+    {
+      "id": "train-status-page",
+      "split": "train",
+      "family": "release_stage",
+      "source": "I built and launched the customer status page. Paying customers used it to track incidents after launch.",
+      "good": "Built the customer status page and released it for customers to track live incidents.",
+      "bad": "Built the customer status page as an internal prototype using mock incidents."
+    },
+    {
+      "id": "train-replenishment",
+      "split": "train",
+      "family": "release_stage",
+      "source": "I wrote a proposal for automatic shelf replenishment and presented it to store operations. No build or trial was approved.",
+      "good": "Designed an automatic shelf replenishment workflow and presented the proposal to store operations.",
+      "bad": "Designed an automatic shelf replenishment workflow and piloted it with store operations."
+    },
+    {
+      "id": "train-returns",
+      "split": "train",
+      "family": "release_stage",
+      "source": "I configured the returns portal and ran a controlled pilot with invited merchants before the public release. My assignment ended after the pilot.",
+      "good": "Configured the returns portal and ran a pilot with invited merchants.",
+      "bad": "Configured the returns portal and launched it for all merchants."
+    },
+    {
+      "id": "train-shift",
+      "split": "train",
+      "family": "scope",
+      "source": "At a clinic I organized the weekend reception rota. The office manager handled weekdays.",
+      "good": "Coordinated weekend reception shifts for a clinic.",
+      "bad": "Coordinated all reception shifts for a clinic."
+    },
+    {
+      "id": "train-transit",
+      "split": "train",
+      "family": "scope",
+      "source": "I updated the fare tables for every route in the transit district, including all bus and ferry lines.",
+      "good": "Updated fare tables across all bus and ferry routes in the transit district.",
+      "bad": "Updated fare tables exclusively for the district’s bus routes."
+    },
+    {
+      "id": "train-language",
+      "split": "train",
+      "family": "scope",
+      "source": "I localized checkout messages into French for the Canadian store. The French store had separate copy and was outside my assignment.",
+      "good": "Localized checkout messages into French for the Canadian store.",
+      "bad": "Localized checkout messages into French for the Canadian and French stores."
+    },
+    {
+      "id": "train-renewal",
+      "split": "train",
+      "family": "scope",
+      "source": "I reviewed renewal terms for active enterprise customers. Another analyst reviewed small-business contracts.",
+      "good": "Reviewed renewal terms for active enterprise accounts.",
+      "bad": "Reviewed renewal terms for enterprise and small-business accounts."
+    },
+    {
+      "id": "train-hours",
+      "split": "train",
+      "family": "measurement",
+      "source": "I consolidated the weekly reporting files. Preparation time fell from five hours to three hours per week.",
+      "good": "Consolidated weekly reporting files, cutting preparation time by two hours per week.",
+      "bad": "Consolidated weekly reporting files, cutting preparation time by three hours per week."
+    },
+    {
+      "id": "train-attendance",
+      "split": "train",
+      "family": "measurement",
+      "source": "I administered training registration. Eighty people registered, and 56 attended the session.",
+      "good": "Managed training registration for 80 people, with 56 attending the session.",
+      "bad": "Managed training registration for 56 people, with 80 attending the session."
+    },
+    {
+      "id": "train-fill-rate",
+      "split": "train",
+      "family": "measurement",
+      "source": "I changed the volunteer reminder schedule. The share of shifts filled rose from 70 percent to 77 percent.",
+      "good": "Revised volunteer reminders, raising the shift fill rate by 7 percentage points.",
+      "bad": "Revised volunteer reminders, raising the shift fill rate by 7 percent relative to baseline."
+    },
+    {
+      "id": "train-cycle",
+      "split": "train",
+      "family": "measurement",
+      "source": "I revised the quote intake form. The median turnaround fell from two business days to one. We did not track the average.",
+      "good": "Revised quote intake, reducing median turnaround from two business days to one.",
+      "bad": "Revised quote intake, reducing average turnaround from two business days to one."
+    },
+    {
+      "id": "train-scheduling",
+      "split": "train",
+      "family": "tools",
+      "source": "I scheduled nightly exports with cron on Linux. I have never used Airflow on this project.",
+      "good": "Scheduled nightly exports with cron on Linux.",
+      "bad": "Scheduled nightly exports with Airflow on Linux."
+    },
+    {
+      "id": "train-enrollment",
+      "split": "train",
+      "family": "tools",
+      "source": "I used Power Query in Excel to clean enrollment files. A teammate wrote the SQL used to extract the raw records.",
+      "good": "Cleaned enrollment records with Excel Power Query using extracts supplied by a teammate.",
+      "bad": "Cleaned enrollment records with SQL queries I wrote to extract and transform the data."
+    },
+    {
+      "id": "train-support-code",
+      "split": "train",
+      "family": "tools",
+      "source": "I replaced manual ticket tagging with a Python script I wrote and maintained. We had no commercial tagging product.",
+      "good": "Automated ticket tagging with a custom Python script.",
+      "bad": "Automated ticket tagging with a commercial tagging platform."
+    },
+    {
+      "id": "train-meeting-notes",
+      "split": "train",
+      "family": "tools",
+      "source": "I coded interview notes by hand in a spreadsheet. I did not use an AI model or transcription service.",
+      "good": "Coded interview notes by hand in a spreadsheet to organize participant feedback.",
+      "bad": "Coded interview notes with an AI model to organize participant feedback."
+    },
+    {
+      "id": "train-target",
+      "split": "train",
+      "family": "outcome",
+      "source": "I prepared a courier consolidation plan projecting $18,000 in annual savings. Finance had not approved implementation when I left.",
+      "good": "Prepared a courier consolidation plan projecting $18,000 in annual savings.",
+      "bad": "Prepared a courier consolidation plan that delivered $18,000 in annual savings."
+    },
+    {
+      "id": "train-paid-invoices",
+      "split": "train",
+      "family": "outcome",
+      "source": "I resolved duplicate freight charges and obtained $6,400 in refunds. All refunds appeared in the company account.",
+      "good": "Resolved duplicate freight charges and recovered $6,400 in refunds.",
+      "bad": "Resolved duplicate freight charges and projected $6,400 in potential refunds still awaiting payment."
+    },
+    {
+      "id": "train-test",
+      "split": "train",
+      "family": "outcome",
+      "source": "I ran a controlled test of a shorter signup form. Completion was unchanged, so the team kept the original.",
+      "good": "Tested a shorter signup form and found no change in completion.",
+      "bad": "Tested a shorter signup form and increased completion."
+    },
+    {
+      "id": "train-wayfinding",
+      "split": "train",
+      "family": "outcome",
+      "source": "I interviewed visitors about confusing signs and recommended a clearer layout. The museum had not replaced any signs by the end of my placement.",
+      "good": "Interviewed museum visitors and recommended a clearer sign layout.",
+      "bad": "Interviewed museum visitors and installed a clearer sign layout."
+    },
+    {
+      "id": "holdout-grant",
+      "split": "holdout",
+      "family": "attribution",
+      "source": "I assembled the budget figures for a grant application. The program director wrote the narrative and submitted the application.",
+      "good": "Compiled budget figures for a grant application submitted by the program director.",
+      "bad": "Compiled budget figures and submitted the grant application."
+    },
+    {
+      "id": "holdout-night-crew",
+      "split": "holdout",
+      "family": "attribution",
+      "source": "I supervised the night loading crew and signed off each shift’s dispatch log. There was no other night supervisor.",
+      "good": "Coordinated night loading as crew supervisor and signed off on dispatch logs.",
+      "bad": "Coordinated night loading under the crew supervisor, who signed off on dispatch logs."
+    },
+    {
+      "id": "holdout-intake",
+      "split": "holdout",
+      "family": "release_stage",
+      "source": "I developed a digital intake form, then released it to patients at both practices. Reception retired the paper form after launch.",
+      "good": "Developed a digital intake form and launched it for patients at both practices.",
+      "bad": "Developed a digital intake form and stopped at a staff-only demonstration."
+    },
+    {
+      "id": "holdout-air-quality",
+      "split": "holdout",
+      "family": "release_stage",
+      "source": "I assembled an air-quality monitor and tested it on a lab bench. Field deployment was deferred until after my internship.",
+      "good": "Assembled an air-quality monitor and tested it on a lab bench.",
+      "bad": "Assembled an air-quality monitor and deployed it in the field."
+    },
+    {
+      "id": "holdout-receiving",
+      "split": "holdout",
+      "family": "scope",
+      "source": "I translated receiving instructions into Polish at the north depot. The other depots continued to use English instructions.",
+      "good": "Translated receiving instructions into Polish for the north depot.",
+      "bad": "Translated receiving instructions into Polish for every depot."
+    },
+    {
+      "id": "holdout-library",
+      "split": "holdout",
+      "family": "scope",
+      "source": "I catalogued the library’s entire oral history collection, including reels, cassettes, and digital recordings.",
+      "good": "Catalogued the library’s entire oral history collection across analog and digital formats.",
+      "bad": "Catalogued only the digital recordings in the library’s oral history collection."
+    },
+    {
+      "id": "holdout-defects",
+      "split": "holdout",
+      "family": "measurement",
+      "source": "I introduced a fixture alignment check. Rejects fell from 12 units per batch to 8 units per batch.",
+      "good": "Introduced a fixture alignment check, reducing rejects by four units per batch.",
+      "bad": "Introduced a fixture alignment check, reducing rejects by eight units per batch."
+    },
+    {
+      "id": "holdout-survey",
+      "split": "holdout",
+      "family": "measurement",
+      "source": "I distributed a tenant survey to 240 households and received 90 completed responses.",
+      "good": "Distributed a tenant survey to 240 households and collected 90 completed responses.",
+      "bad": "Distributed a tenant survey to 240 households and collected 240 completed responses."
+    },
+    {
+      "id": "holdout-prototypes",
+      "split": "holdout",
+      "family": "tools",
+      "source": "I made clickable interface mockups in Figma. A developer later implemented them in React.",
+      "good": "Created clickable interface mockups in Figma for a developer to implement in React.",
+      "bad": "Created clickable interface mockups in Figma and implemented them myself in React."
+    },
+    {
+      "id": "holdout-stocktake",
+      "split": "holdout",
+      "family": "tools",
+      "source": "I wrote a Bash script to compare handheld scanner exports. The team did not have a database for the stocktake.",
+      "good": "Compared handheld scanner exports using a Bash script written for the stocktake.",
+      "bad": "Compared handheld scanner exports using SQL queries against the stocktake database."
+    },
+    {
+      "id": "holdout-fundraising",
+      "split": "holdout",
+      "family": "outcome",
+      "source": "I organized an alumni appeal with a $20,000 target. Donors contributed $16,500 by the close of the appeal.",
+      "good": "Organized an alumni appeal that raised $16,500 toward a $20,000 target.",
+      "bad": "Organized an alumni appeal that raised its full $20,000 target."
+    },
+    {
+      "id": "holdout-chiller",
+      "split": "holdout",
+      "family": "outcome",
+      "source": "I replaced a faulty chiller seal and verified that leakage stopped. A cost estimate was outside the repair assignment.",
+      "good": "Replaced a faulty chiller seal and verified that leakage stopped.",
+      "bad": "Replaced a faulty chiller seal and verified $5,000 in maintenance savings."
+    }
+  ],
+  "probes": [
+    {
+      "id": "probe-coaching",
+      "source": "On Saturdays I trained six new cashiers to close their tills. The store manager handled performance reviews and supervision.",
+      "required": ["train|coach|instruct|teach|taught|onboard|mentor|guid", "\\b(?:6|six)\\b", "cashier|checkout (?:staff|clerk|team)|cash.handl", "clos|balanc|reconcil"],
+      "forbidden": ["\\b(?:managed|supervised|oversaw|directly led) (?:an? (?:team|group) of |a staff of )?(?:6|six)\\b", "(?:conducted|handled|performed|led) performance reviews"]
+    },
+    {
+      "id": "probe-lab",
+      "source": "I built and bench-tested a prototype leak detector using an Arduino. It stayed in the lab.",
+      "required": ["arduino", "leak", "prototyp|bench|lab(?:oratory)?|proof.of.concept"],
+      "forbidden": ["mass.produc|field.deploy|deployed (?:the |a |it )?(?:prototype )?(?:in|to|across) (?:the )?(?:field|sites?|production)|commercial(?:ly)? (?:available|released)"]
+    },
+    {
+      "id": "probe-backlog",
+      "source": "I reorganized the repairs queue. At the start we had 48 overdue jobs and at the end we had 30.",
+      "required": ["overdue|backlog|past.due|late (?:jobs|repairs)", "(?:\\b48\\b|forty.eight).{0,55}(?:\\b30\\b|thirty)|(?:\\b18\\b|eighteen) (?:fewer |overdue |past.due )?(?:jobs|repairs|tickets)|(?:by|of) (?:\\b18\\b|eighteen)|37\\.5\\s*(?:%|percent)"],
+      "forbidden": ["(?:by|of) (?:30|thirty|48|forty.eight) (?:jobs|repairs|tickets|percent)|(?:30|48)\\s*%"]
+    },
+    {
+      "id": "probe-spend",
+      "source": "I designed a plan to pool printing orders. It would save an estimated $9,000 a year if approved. The plan is awaiting approval.",
+      "required": ["print", "9(?:,?000|k)\\b|nine thousand", "estimat|project|potential|forecast|propos|could|would|anticipat|predict|expect"],
+      "forbidden": ["(?:saved|recouped|recovered|realized|achieved|delivered) (?:an? (?:annual|total) (?:savings? of )?)?\\$?9(?:,?000|k)\\b"]
+    },
+    {
+      "id": "probe-launch",
+      "source": "I led the rollout of the digital room-booking system. It went live in all four conference centers.",
+      "required": ["led|lead|spearhead|direct|head(?:ed)?|manag|oversaw|own(?:ed)?|coordinat", "book|reserv", "(?:four|4) (?:conference |convention |meeting )?(?:cent(?:er|re)s|locations|sites|venues|facilities)", "roll.?out|rolled out|launch|went live|deploy|implement|release|introduc"],
+      "forbidden": ["staff.only|single.site|one conference center|still (?:in|a) (?:the )?pilot|awaiting (?:approval|launch)"]
+    },
+    {
+      "id": "probe-map",
+      "source": "I used QGIS to map bus stops that lacked shelters. The planning unit used my map to select sites for inspection.",
+      "required": ["qgis", "bus stop|transit stop", "shelter", "map|geospatial|spatial"],
+      "forbidden": ["arcgis|tableau|(?:installed|built|constructed) (?:new |bus )?shelters|(?:led|conducted) (?:the )?(?:site |field )?inspections"]
+    }
+  ]
+}

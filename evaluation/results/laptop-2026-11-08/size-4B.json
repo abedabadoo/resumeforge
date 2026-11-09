@@ -1,0 +1,129 @@
+{
+  "model": "4B",
+  "measured_seconds": 124.9,
+  "model_only_reviews": [
+    {
+      "id": "d-rev-01",
+      "expect": "accept",
+      "decision": "accept",
+      "reason": "The candidate statement is a direct paraphrase of the evidence, accurately reflecting the action (drafting checklists) and the subject (turbine maintenance team) without adding unsupported details or reversing the meaning.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-02",
+      "expect": "reject",
+      "decision": "hold",
+      "reason": "The candidate claim reverses the causal relationship and ownership of actions found in the evidence. The evidence states the candidate 'Drafted' checklists and the 'supervisor' 'approved' releases, whereas the candidate claim states they 'Approved' releases. Additionally, the evidence does not support that the candidate drafted the checklists for the supervisor's approval; it only states they drafted them for the team, with the supervisor approving the releases separately.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-03",
+      "expect": "accept",
+      "decision": "accept",
+      "reason": "The candidate statement is a direct, accurate paraphrase of the evidence, preserving the core action (separating walk-ins from scheduled repairs), the specific metric (median wait), and the exact numerical outcome (18 to 12 minutes) without adding unsupported details or reversing causality.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-04",
+      "expect": "reject",
+      "decision": "hold",
+      "reason": "The candidate claim reverses the unit of time (minutes vs. hours) and changes the frequency metric (median vs. average), which are unsupported alterations to the evidence.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-05",
+      "expect": "reject",
+      "decision": "hold",
+      "reason": "The evidence states that a proposal was documented but no migration was performed, whereas the candidate claim asserts that the migration was successfully completed. This is a direct reversal of the outcome.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-06",
+      "expect": "accept",
+      "decision": "accept",
+      "reason": "The candidate statement is a concise paraphrase of the evidence, accurately reflecting the collaboration with a lab technician, the identification of damaged samples, and the documentation of the shipping handoff without adding unsupported details or reversing the meaning.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-07",
+      "expect": "reject",
+      "decision": "hold",
+      "reason": "The candidate claim states the candidate performed the action of replacing the motor, whereas the evidence indicates the candidate only recorded downtime while another team performed the replacement. This reverses the ownership of the accomplishment.",
+      "correct": true
+    },
+    {
+      "id": "d-rev-08",
+      "expect": "accept",
+      "decision": "accept",
+      "reason": "The candidate statement is a concise paraphrase of the evidence, accurately capturing the action (testing), the subject (recovery script), and the context (staging) without adding unsupported details or reversing the meaning.",
+      "correct": true
+    }
+  ],
+  "draft": {
+    "concise": "Tested a backup restoration checklist in staging to validate production readiness and documented two missing configuration steps for the service owner.",
+    "detailed": "I tested a backup restoration checklist in the staging environment to validate production readiness, identifying and documenting two missing configuration steps for the service owner."
+  },
+  "metrics": {
+    "peak_process_rss_mib": 4807.9,
+    "start_swap_mib": 3204.25,
+    "max_swap_growth_mib": 0,
+    "worst_pressure_level": 1
+  },
+  "timings": [
+    {
+      "seconds": 16.993,
+      "input_tokens": 196,
+      "output_tokens": 59,
+      "decode_tokens_per_second": 6.590175933836452
+    },
+    {
+      "seconds": 18.519,
+      "input_tokens": 196,
+      "output_tokens": 106,
+      "decode_tokens_per_second": 6.55836249306219
+    },
+    {
+      "seconds": 14.923,
+      "input_tokens": 212,
+      "output_tokens": 76,
+      "decode_tokens_per_second": 6.308076356320525
+    },
+    {
+      "seconds": 8.948,
+      "input_tokens": 213,
+      "output_tokens": 46,
+      "decode_tokens_per_second": 7.002505807800512
+    },
+    {
+      "seconds": 9.741,
+      "input_tokens": 193,
+      "output_tokens": 53,
+      "decode_tokens_per_second": 7.0787111844998
+    },
+    {
+      "seconds": 10.975,
+      "input_tokens": 205,
+      "output_tokens": 62,
+      "decode_tokens_per_second": 7.0830345299094475
+    },
+    {
+      "seconds": 10.056,
+      "input_tokens": 196,
+      "output_tokens": 57,
+      "decode_tokens_per_second": 7.1207401602497145
+    },
+    {
+      "seconds": 10.312,
+      "input_tokens": 193,
+      "output_tokens": 60,
+      "decode_tokens_per_second": 7.078312530292779
+    },
+    {
+      "seconds": 18.971,
+      "input_tokens": 264,
+      "output_tokens": 68,
+      "decode_tokens_per_second": 6.68904668605159
+    }
+  ],
+  "error": null
+}

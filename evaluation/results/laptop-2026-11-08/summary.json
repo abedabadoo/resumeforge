@@ -1,0 +1,65 @@
+{
+  "planned": 44,
+  "attempted": 44,
+  "passed": 37,
+  "incomplete": false,
+  "execution_errors": 0,
+  "graded_valid_reviews": 10,
+  "graded_invalid_reviews": 12,
+  "wrongly_accepted_invalid_reviews": 1,
+  "wrongly_rejected_valid_reviews": 3,
+  "observed_chat_attempt_cases": 36,
+  "failures": [
+    {
+      "id": "h-rev-04",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label"
+      ]
+    },
+    {
+      "id": "h-rev-05",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label"
+      ]
+    },
+    {
+      "id": "h-rev-12",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label",
+        "rejection gives a reason"
+      ]
+    },
+    {
+      "id": "h-rev-18",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label"
+      ]
+    },
+    {
+      "id": "h-req-04",
+      "error": null,
+      "assertions": [
+        "evaluated final text satisfies or fails the explicit brief as labeled"
+      ]
+    },
+    {
+      "id": "h-req-05",
+      "error": null,
+      "assertions": [
+        "evaluated final text satisfies or fails the explicit brief as labeled"
+      ]
+    },
+    {
+      "id": "h-pdf-04",
+      "error": null,
+      "assertions": [
+        "target slot actually shortened; keeping originals is not a successful edit"
+      ]
+    }
+  ],
+  "human_review_replacement_validated": false
+}

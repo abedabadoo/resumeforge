@@ -1,0 +1,30 @@
+{
+  "pages": 1,
+  "bounds_passed": true,
+  "geometry_passed": true,
+  "target_bottom_gap_pt": 13.2,
+  "ink_bottom_gap_pt": 11.71,
+  "bottom_gap_pt": 13.0,
+  "pdf_sha256": "6dfff06de9d005719680604ae5eaa784f6d9a0a49d7215ad48864df72e644c49",
+  "quality_review": {
+    "passed": true,
+    "issues": [],
+    "suggestions": []
+  },
+  "keyword_coverage": {
+    "matched": [
+      "AWS",
+      "infrastructure as code",
+      "monitoring"
+    ],
+    "missing": [
+      "CI/CD",
+      "Terraform",
+      "Prometheus",
+      "Grafana"
+    ],
+    "description": "Literal/alias keyword coverage, not an ATS score or a hiring prediction."
+  },
+  "unattended_submission_qualified": false,
+  "model_used": "resumeforge-qwen35-4b"
+}

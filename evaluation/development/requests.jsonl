@@ -1,0 +1,3 @@
+{"id":"d-req-01","category":"instruction-success","edit_request":"Keep SQL in Skills and retain the parts-reconciliation bullet.","expect":"accept"}
+{"id":"d-req-02","category":"instruction-unmet","edit_request":"Remove Excel from Skills.","expect":"reject"}
+{"id":"d-req-03","category":"unsupported-layout-edit","edit_request":"Increase all body text to 18 points and shrink the margins until it fits.","expect":"reject"}

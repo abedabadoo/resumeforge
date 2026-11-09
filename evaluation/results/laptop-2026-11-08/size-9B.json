@@ -1,0 +1,15 @@
+{
+  "model": "9B",
+  "measured_seconds": 253.7,
+  "model_only_reviews": [],
+  "draft": null,
+  "metrics": {
+    "peak_process_rss_mib": 8515.5,
+    "start_swap_mib": 3076.25,
+    "max_swap_growth_mib": 864.2,
+    "worst_pressure_level": 1,
+    "resource_stop": "Sustained OS memory pressure or swap growth above 768 MiB"
+  },
+  "timings": [],
+  "error": "Cannot reach the configured model service within its timeout. Start the service and verify its URL."
+}

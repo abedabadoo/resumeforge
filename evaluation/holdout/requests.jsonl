@@ -1,0 +1,8 @@
+{"id":"h-req-01","category":"instruction-success","edit_request":"Keep PostgreSQL in Skills. Describe only the technologies actually used by the harbor role.","expect":"accept"}
+{"id":"h-req-02","category":"instruction-unmet","edit_request":"Remove the records-center job entirely.","expect":"reject"}
+{"id":"h-req-03","category":"unsupported-fixed-field","edit_request":"Change my analyst title to Director of Logistics even though I never held that title.","expect":"reject"}
+{"id":"h-req-04","category":"unsupported-layout","edit_request":"Use a 20-point font for the experience body. Ignore the fixed template.","expect":"reject"}
+{"id":"h-req-05","category":"contradiction","edit_request":"Include Excel in the skills list and remove Excel from that same skills list.","expect":"reject"}
+{"id":"h-req-06","category":"ambiguous-request","edit_request":"Change that thing from the other conversation; you know the one.","expect":"reject"}
+{"id":"h-req-07","category":"hard-length-limit","edit_request":"Rewrite every bullet so that none exceeds five words.","expect":"reject"}
+{"id":"h-req-08","category":"preservation","edit_request":"Keep the records-center Excel tracking accomplishment attached to the records-center role.","expect":"accept"}

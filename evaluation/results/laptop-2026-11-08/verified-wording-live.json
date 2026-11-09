@@ -1,0 +1,13 @@
+{
+  "status": "needs_content",
+  "job": "Cloud security engineer: harden AWS with infrastructure as code, automate access controls and evidence collection, and maintain monitoring and CI/CD workflows.",
+  "wording_policy": "verified",
+  "selected_experience_statements": 11,
+  "each_exact_in_its_original_slot": true,
+  "all_skills_from_profile": true,
+  "geometry_passed": false,
+  "ink_bottom_gap_pt": 28.91,
+  "inference_calls": 1,
+  "export_offered": false,
+  "seconds": 44.2
+}

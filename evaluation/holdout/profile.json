@@ -1,0 +1,15 @@
+{
+ "name":"Example Candidate H","contact":"candidate-h@example.invalid",
+ "roles":[
+ {"id":"harbor","company":"Fictional Harbor Lab","title":"Logistics Analyst","dates":"2021 - 2025","location":"Example City","bullets":[
+ {"id":"h1","text":"Queried PostgreSQL to reconcile unmatched parcel scans with dispatch manifests and routed discrepancies to the depot supervisor."},
+ {"id":"h2","text":"Compared barcode reader performance with technicians during a staging trial and documented unreadable label samples."},
+ {"id":"h3","text":"Drafted a proposal to use Docker for a routing prototype, but never deployed Docker."},
+ {"id":"h4","text":"Measured weekly return counts before and after a packaging pilot led by the materials team."}]},
+ {"id":"archive","company":"Fictional Records Center","title":"Records Assistant","dates":"2018 - 2021","location":"Example City","bullets":[
+ {"id":"h5","text":"Built Excel tracking sheets for archival requests and reconciled outstanding requests with the intake log."},
+ {"id":"h6","text":"Introduced a shelf labeling checklist and demonstrated the retrieval procedure to new volunteers."}]}],
+ "skills":["PostgreSQL","Excel","Records reconciliation"],"facts":[
+ {"id":"hf1","role_id":"harbor","text":"Used Python to group unreadable labels by printer model before the staging trial review.","confirmed":true},
+ {"id":"hf2","role_id":"archive","text":"Built Airflow workflows that refreshed a public records catalogue.","confirmed":false}]
+}

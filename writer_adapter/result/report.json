@@ -1,0 +1,403 @@
+{
+  "method": "first-divergent-token conditional pairwise preference LoRA; not full QLoRA/SFT",
+  "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  "runtime_archive_sha256": "c690cb11be36a910df7e3d5baf22ed2fb53c02243c72cd33aae8f5fd6c6afe55",
+  "cases_sha256": "f096b0d97ae66f7bf312c231a3bd95d077af2b92531eaa51d34a564bd26559d1",
+  "adapter_sha256": "f67780e75e1598a176f977a3cf8af576e9cc1220ac0b8c0d656a76c0bb4b6163",
+  "target": "blk.31.ffn_down.weight",
+  "rank": 4,
+  "alpha": 4,
+  "fitted_A_values": 36864,
+  "train_derived_B_values": 10240,
+  "train_sources": 24,
+  "holdout_sources": 12,
+  "free_probes": 6,
+  "elapsed_inference_and_fit_seconds": 334.44,
+  "max_abs_native_margin_delta": 0.8336658477783203,
+  "metrics": {
+    "base": {
+      "pairs": {
+        "total": 12,
+        "preferred": 12,
+        "log_loss": 0.00425602046661203
+      },
+      "free_writing_passed": 6,
+      "free_writing_total": 6
+    },
+    "adapter": {
+      "pairs": {
+        "total": 12,
+        "preferred": 12,
+        "log_loss": 0.003623941456314832
+      },
+      "free_writing_passed": 6,
+      "free_writing_total": 6
+    }
+  },
+  "pairs": [
+    {
+      "id": "holdout-grant",
+      "family": "attribution",
+      "source": "I assembled the budget figures for a grant application. The program director wrote the narrative and submitted the application.",
+      "good": "Compiled budget figures for a grant application submitted by the program director.",
+      "bad": "Compiled budget figures and submitted the grant application.",
+      "base": {
+        "good_token": 364,
+        "bad_token": 321,
+        "prefix_tokens": 83,
+        "margin": 3.9346675872802734
+      },
+      "adapter": {
+        "good_token": 364,
+        "bad_token": 321,
+        "prefix_tokens": 83,
+        "margin": 4.014238357543945
+      }
+    },
+    {
+      "id": "holdout-night-crew",
+      "family": "attribution",
+      "source": "I supervised the night loading crew and signed off each shift’s dispatch log. There was no other night supervisor.",
+      "good": "Coordinated night loading as crew supervisor and signed off on dispatch logs.",
+      "bad": "Coordinated night loading under the crew supervisor, who signed off on dispatch logs.",
+      "base": {
+        "good_token": 430,
+        "bad_token": 1172,
+        "prefix_tokens": 85,
+        "margin": 5.0335493087768555
+      },
+      "adapter": {
+        "good_token": 430,
+        "bad_token": 1172,
+        "prefix_tokens": 85,
+        "margin": 5.867215156555176
+      }
+    },
+    {
+      "id": "holdout-intake",
+      "family": "release_stage",
+      "source": "I developed a digital intake form, then released it to patients at both practices. Reception retired the paper form after launch.",
+      "good": "Developed a digital intake form and launched it for patients at both practices.",
+      "bad": "Developed a digital intake form and stopped at a staff-only demonstration.",
+      "base": {
+        "good_token": 11291,
+        "bad_token": 10184,
+        "prefix_tokens": 90,
+        "margin": 17.020365715026855
+      },
+      "adapter": {
+        "good_token": 11291,
+        "bad_token": 10184,
+        "prefix_tokens": 90,
+        "margin": 16.845740795135498
+      }
+    },
+    {
+      "id": "holdout-air-quality",
+      "family": "release_stage",
+      "source": "I assembled an air-quality monitor and tested it on a lab bench. Field deployment was deferred until after my internship.",
+      "good": "Assembled an air-quality monitor and tested it on a lab bench.",
+      "bad": "Assembled an air-quality monitor and deployed it in the field.",
+      "base": {
+        "good_token": 12152,
+        "bad_token": 25241,
+        "prefix_tokens": 89,
+        "margin": 10.442334175109863
+      },
+      "adapter": {
+        "good_token": 12152,
+        "bad_token": 25241,
+        "prefix_tokens": 89,
+        "margin": 10.615047454833984
+      }
+    },
+    {
+      "id": "holdout-receiving",
+      "family": "scope",
+      "source": "I translated receiving instructions into Polish at the north depot. The other depots continued to use English instructions.",
+      "good": "Translated receiving instructions into Polish for the north depot.",
+      "bad": "Translated receiving instructions into Polish for every depot.",
+      "base": {
+        "good_token": 279,
+        "bad_token": 1396,
+        "prefix_tokens": 86,
+        "margin": 14.279131889343262
+      },
+      "adapter": {
+        "good_token": 279,
+        "bad_token": 1396,
+        "prefix_tokens": 86,
+        "margin": 14.362534523010254
+      }
+    },
+    {
+      "id": "holdout-library",
+      "family": "scope",
+      "source": "I catalogued the library’s entire oral history collection, including reels, cassettes, and digital recordings.",
+      "good": "Catalogued the library’s entire oral history collection across analog and digital formats.",
+      "bad": "Catalogued only the digital recordings in the library’s oral history collection.",
+      "base": {
+        "good_token": 279,
+        "bad_token": 1132,
+        "prefix_tokens": 83,
+        "margin": 15.532051086425781
+      },
+      "adapter": {
+        "good_token": 279,
+        "bad_token": 1132,
+        "prefix_tokens": 83,
+        "margin": 15.548308372497559
+      }
+    },
+    {
+      "id": "holdout-defects",
+      "family": "measurement",
+      "source": "I introduced a fixture alignment check. Rejects fell from 12 units per batch to 8 units per batch.",
+      "good": "Introduced a fixture alignment check, reducing rejects by four units per batch.",
+      "bad": "Introduced a fixture alignment check, reducing rejects by eight units per batch.",
+      "base": {
+        "good_token": 2943,
+        "bad_token": 7810,
+        "prefix_tokens": 92,
+        "margin": 7.213418960571289
+      },
+      "adapter": {
+        "good_token": 2943,
+        "bad_token": 7810,
+        "prefix_tokens": 92,
+        "margin": 7.228588104248047
+      }
+    },
+    {
+      "id": "holdout-survey",
+      "family": "measurement",
+      "source": "I distributed a tenant survey to 240 households and received 90 completed responses.",
+      "good": "Distributed a tenant survey to 240 households and collected 90 completed responses.",
+      "bad": "Distributed a tenant survey to 240 households and collected 240 completed responses.",
+      "base": {
+        "good_token": 24,
+        "bad_token": 17,
+        "prefix_tokens": 92,
+        "margin": 11.568798065185547
+      },
+      "adapter": {
+        "good_token": 24,
+        "bad_token": 17,
+        "prefix_tokens": 92,
+        "margin": 11.469350814819336
+      }
+    },
+    {
+      "id": "holdout-prototypes",
+      "family": "tools",
+      "source": "I made clickable interface mockups in Figma. A developer later implemented them in React.",
+      "good": "Created clickable interface mockups in Figma for a developer to implement in React.",
+      "bad": "Created clickable interface mockups in Figma and implemented them myself in React.",
+      "base": {
+        "good_token": 364,
+        "bad_token": 321,
+        "prefix_tokens": 85,
+        "margin": 3.6997203826904297
+      },
+      "adapter": {
+        "good_token": 364,
+        "bad_token": 321,
+        "prefix_tokens": 85,
+        "margin": 3.805896759033203
+      }
+    },
+    {
+      "id": "holdout-stocktake",
+      "family": "tools",
+      "source": "I wrote a Bash script to compare handheld scanner exports. The team did not have a database for the stocktake.",
+      "good": "Compared handheld scanner exports using a Bash script written for the stocktake.",
+      "bad": "Compared handheld scanner exports using SQL queries against the stocktake database.",
+      "base": {
+        "good_token": 264,
+        "bad_token": 7622,
+        "prefix_tokens": 88,
+        "margin": 13.185405731201172
+      },
+      "adapter": {
+        "good_token": 264,
+        "bad_token": 7622,
+        "prefix_tokens": 88,
+        "margin": 13.59083366394043
+      }
+    },
+    {
+      "id": "holdout-fundraising",
+      "family": "outcome",
+      "source": "I organized an alumni appeal with a $20,000 target. Donors contributed $16,500 by the close of the appeal.",
+      "good": "Organized an alumni appeal that raised $16,500 toward a $20,000 target.",
+      "bad": "Organized an alumni appeal that raised its full $20,000 target.",
+      "base": {
+        "good_token": 393,
+        "bad_token": 1141,
+        "prefix_tokens": 99,
+        "margin": 13.04136848449707
+      },
+      "adapter": {
+        "good_token": 393,
+        "bad_token": 1141,
+        "prefix_tokens": 99,
+        "margin": 13.07414722442627
+      }
+    },
+    {
+      "id": "holdout-chiller",
+      "family": "outcome",
+      "source": "I replaced a faulty chiller seal and verified that leakage stopped. A cost estimate was outside the repair assignment.",
+      "good": "Replaced a faulty chiller seal and verified that leakage stopped.",
+      "bad": "Replaced a faulty chiller seal and verified $5,000 in maintenance savings.",
+      "base": {
+        "good_token": 421,
+        "bad_token": 393,
+        "prefix_tokens": 90,
+        "margin": 12.257587432861328
+      },
+      "adapter": {
+        "good_token": 421,
+        "bad_token": 393,
+        "prefix_tokens": 90,
+        "margin": 12.215965270996094
+      }
+    }
+  ],
+  "free_writing": [
+    {
+      "id": "probe-coaching",
+      "source": "On Saturdays I trained six new cashiers to close their tills. The store manager handled performance reviews and supervision.",
+      "base": {
+        "text": "Trained six new cashiers on till closure procedures while the store manager oversaw performance reviews and supervision.",
+        "completion_tokens": 21,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      },
+      "adapter": {
+        "text": "Trained six new cashiers on till closure procedures while the store manager oversaw performance reviews and supervision.",
+        "completion_tokens": 21,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      }
+    },
+    {
+      "id": "probe-lab",
+      "source": "I built and bench-tested a prototype leak detector using an Arduino. It stayed in the lab.",
+      "base": {
+        "text": "Developed and bench-tested a prototype leak detector using an Arduino, which remained in the lab.",
+        "completion_tokens": 19,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      },
+      "adapter": {
+        "text": "Developed and bench-tested a prototype leak detector using an Arduino, which remained in the lab.",
+        "completion_tokens": 19,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      }
+    },
+    {
+      "id": "probe-backlog",
+      "source": "I reorganized the repairs queue. At the start we had 48 overdue jobs and at the end we had 30.",
+      "base": {
+        "text": "Reorganized the repairs queue, reducing overdue jobs from 48 to 30.",
+        "completion_tokens": 18,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      },
+      "adapter": {
+        "text": "Reorganized the repairs queue, reducing overdue jobs from 48 to 30.",
+        "completion_tokens": 18,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      }
+    },
+    {
+      "id": "probe-spend",
+      "source": "I designed a plan to pool printing orders. It would save an estimated $9,000 a year if approved. The plan is awaiting approval.",
+      "base": {
+        "text": "Designed a plan to pool printing orders with an estimated annual savings of $9,000, pending approval.",
+        "completion_tokens": 23,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      },
+      "adapter": {
+        "text": "Designed a plan to pool printing orders, which would save an estimated $9,000 annually if approved.",
+        "completion_tokens": 23,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      }
+    },
+    {
+      "id": "probe-launch",
+      "source": "I led the rollout of the digital room-booking system. It went live in all four conference centers.",
+      "base": {
+        "text": "Led the rollout of the digital room-booking system, successfully deploying it across all four conference centers.",
+        "completion_tokens": 20,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      },
+      "adapter": {
+        "text": "Led the rollout of the digital room-booking system, successfully deploying it across all four conference centers.",
+        "completion_tokens": 20,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      }
+    },
+    {
+      "id": "probe-map",
+      "source": "I used QGIS to map bus stops that lacked shelters. The planning unit used my map to select sites for inspection.",
+      "base": {
+        "text": "Mapped bus stops lacking shelters using QGIS to assist the planning unit in selecting inspection sites.",
+        "completion_tokens": 18,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      },
+      "adapter": {
+        "text": "Mapped bus stops lacking shelters using QGIS to assist the planning unit in selecting inspection sites.",
+        "completion_tokens": 18,
+        "stop": "eog",
+        "missing_anchors": [],
+        "forbidden_hits": [],
+        "invalid": [],
+        "pass": true
+      }
+    }
+  ],
+  "deployed": false,
+  "limitations": "Small synthetic corpus; one teacher-forced token contrast per pair. Prose checks detect named errors only. No guarantee against omitted or invented claims."
+}

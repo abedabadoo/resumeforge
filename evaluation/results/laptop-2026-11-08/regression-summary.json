@@ -1,0 +1,36 @@
+{
+  "planned": 7,
+  "attempted": 7,
+  "passed": 4,
+  "incomplete": false,
+  "execution_errors": 0,
+  "graded_valid_reviews": 3,
+  "graded_invalid_reviews": 1,
+  "wrongly_accepted_invalid_reviews": 0,
+  "wrongly_rejected_valid_reviews": 3,
+  "observed_chat_attempt_cases": 3,
+  "failures": [
+    {
+      "id": "h-rev-04",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label"
+      ]
+    },
+    {
+      "id": "h-rev-05",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label"
+      ]
+    },
+    {
+      "id": "h-rev-18",
+      "error": null,
+      "assertions": [
+        "review decision equals independent label"
+      ]
+    }
+  ],
+  "human_review_replacement_validated": false
+}

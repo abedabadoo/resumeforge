@@ -1,0 +1,28 @@
+{
+  "split": "holdout",
+  "ids": [
+    "h-rev-04",
+    "h-rev-05",
+    "h-rev-12",
+    "h-rev-18",
+    "h-req-04",
+    "h-req-05",
+    "h-pdf-04"
+  ],
+  "repeat": 1,
+  "settings": {
+    "wording_policy": "rewrite",
+    "strategy": "laptop",
+    "provider": "openai-compatible",
+    "base_url": "http://127.0.0.1:18766/v1",
+    "model": "resumeforge-qwen35-4b",
+    "api_key_env": "",
+    "timeout_seconds": 240,
+    "max_rounds": 2
+  },
+  "revision": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  "code_and_fixture_hash": "742cc6dec6826799f4e50967dfdd99d70c20172f8169dd9cbd603f0115316158",
+  "python": "3.13.1",
+  "system": "macOS-15.8.1-x86_64-i386-64bit-Mach-O",
+  "case_budget": 600
+}

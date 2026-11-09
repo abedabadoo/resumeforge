@@ -1,0 +1,14 @@
+{
+ "name":"Example Candidate D","contact":"candidate-d@example.invalid",
+ "roles":[
+ {"id":"repair","company":"Example Repair Lab","title":"Service Coordinator","dates":"2022 - 2025","location":"Example City","bullets":[
+ {"id":"d1","text":"Wrote SQL queries to reconcile parts records with service tickets and sent discrepancies to the inventory team."},
+ {"id":"d2","text":"Paired with two technicians to document the repair intake process and explain it to new coordinators."},
+ {"id":"d3","text":"Compared a proposed Elasticsearch index with the existing database; no Elasticsearch deployment occurred."}]},
+ {"id":"dispatch","company":"Example Dispatch Office","title":"Scheduling Assistant","dates":"2020 - 2022","location":"Example City","bullets":[
+ {"id":"d4","text":"Prepared daily delivery schedules from dispatch requests and flagged conflicting assignments for review."},
+ {"id":"d5","text":"Used Excel to summarize missed collections by route and circulated weekly exception reports."}]}],
+ "skills":["SQL","Excel","Inventory reconciliation"],"facts":[
+ {"id":"df1","role_id":"repair","text":"Built a Python script that validated parts codes against the inventory catalogue before import.","confirmed":true},
+ {"id":"df2","role_id":"dispatch","text":"Implemented Kafka message consumers for dispatch notifications.","confirmed":false}]
+}

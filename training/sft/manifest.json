@@ -1,0 +1,22 @@
+{
+  "train": {
+    "rows": 300,
+    "scenarios": 90,
+    "tasks": {
+      "versions": 90,
+      "verdict": 180,
+      "focus": 30
+    },
+    "sha256": "ba7751266dc525ee5b962eac1c633493363ba3a7c885238ba4f69237f90b99ee"
+  },
+  "validation": {
+    "rows": 100,
+    "scenarios": 30,
+    "tasks": {
+      "versions": 30,
+      "verdict": 60,
+      "focus": 10
+    },
+    "sha256": "43fd314e124d468f43985e54e58d10c3a61c22cebd4670a10d27c3d04c4aad2a"
+  }
+}
