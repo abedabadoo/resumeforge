@@ -1,0 +1,12 @@
+The application uses dynamically linked Qt 6.11.3 and Qt for Python 6.11.3
+(PySide6 Essentials and shiboken6) under the GNU Lesser General Public License
+version 3. Their license texts are included here. The application uses the
+unmodified libraries distributed by the Qt Project on PyPI, with the complete
+wheel URLs and hashes recorded in runtime-lock.json.
+
+Qt sources: https://github.com/qt/qtbase/tree/v6.11.3
+Qt for Python sources: https://github.com/pyside/pyside-setup/tree/v6.11.3
+Qt packages: https://download.qt.io/official_releases/qt/6.11/6.11.3/
+
+The Qt libraries are separately replaceable under runtime/Lib/site-packages.
+Other dependency licenses are provided with their installed distributions.

@@ -1,8 +1,18 @@
 # ResumeForge
 
-A local desktop-style resume app that runs in your browser. It turns a structured profile into a searchable, selectable PDF using a fixed template. The writing model proposes content; the renderer controls typography. No ChatGPT subscription, conversation, or Codex process is needed to run the installed app.
+A native Windows desktop app for tailoring a resume and saving a checked PDF. A browser interface is also available for local use. It turns a structured profile into a searchable, selectable PDF using a fixed template. The writing model proposes content; the renderer controls typography. No ChatGPT subscription, conversation, or Codex process is needed to run the installed app.
 
 [Laptop evaluation, training results and known limits](Laptop-validation.md)
+
+## Install on Windows
+
+Download **ResumeForge-Setup-x64.exe** from the [Windows desktop release](https://github.com/abedabadoo/resumeforge/releases/tag/v0.3.0) while signed in to the private repository. Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs.
+
+Start with your preloaded resume, paste a posting, then choose **Build resume**. The right pane previews the generated PDF. **Save checked PDF** becomes available after the writing and layout checks pass. **Bullet ideas** provides fictional examples you can turn into verified facts.
+
+The first launch works with source wording. For AI rewrites, start a local model service on your PC. Open **Model settings**, select **Ollama** or **OpenAI-compatible endpoint**, enter the service URL, and choose **Find installed models** or enter its model name. The PC model is a separate installation. Your workspace, generated previews, and run reports are stored under `%LOCALAPPDATA%\ResumeForge\workspace`.
+
+For development from a Windows source checkout with Python installed, run **Launch ResumeForge on Windows.cmd**. To recreate the downloadable installer, run `python tools/windows/build.py --work dist/build --out dist/windows` with Go and NSIS available. `tools/windows/runtime-lock.json` records the downloads and SHA-256 hashes.
 
 ## Start on this Mac
 
@@ -48,7 +58,7 @@ The laptop uses **Qwen3.5-4B Q4_K_M** with the pinned Intel build of llama.cpp (
 
 The 2.74 GB weights are an Unsloth conversion of Qwen's Apache-2.0 model. Installed outside the app: weights, verified inference runtime, and the Python environment. The ZIP contains code and small training artifacts, not the multi-gigabyte base model. The actual hardware observations, training comparisons and live tests are in the accompanying laptop validation report. [Qwen model card](https://huggingface.co/Qwen/Qwen3.5-4B) · [exact quantization revision](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/tree/e87f176479d0855a907a41277aca2f8ee7a09523) · [runtime release](https://github.com/ggml-org/llama.cpp/releases/tag/b12189).
 
-For Windows, extract the project and run **Launch ResumeForge on Windows.cmd** with a supported Python installation. Select a local Ollama or OpenAI-compatible inference endpoint on that computer. The Windows launcher and CUDA recipe were prepared on macOS; hardware-specific performance and compatibility must be tested on the PC. Do not copy the Mac binary or Python environment. Reuse the frozen cases in `evaluation/` to compare model choices before replacing the laptop baseline.
+On the PC, use the Windows desktop installer above. Reuse the cases in `evaluation/` to compare candidate local models on that hardware.
 
 If you deliberately configure a remote endpoint instead, that service receives the data required for its tasks. Keys for such services are read from an environment variable and not stored as secrets in the UI. The installed laptop endpoint needs no key.
 

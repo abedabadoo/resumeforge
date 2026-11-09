@@ -1,0 +1,109 @@
+name: Windows desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-desktop.yml'
+      - 'tools/windows/**'
+      - 'resumeforge/**'
+      - 'pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    name: Build and exercise the Windows x64 app
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+
+      - name: Locate installer compiler
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}/NSIS/makensis.exe"
+          if (-not (Test-Path $compiler)) {
+            choco install nsis --yes --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          if (-not (Test-Path $compiler)) { throw "NSIS compiler unavailable: $compiler" }
+          "RF_MAKENSIS=$compiler" >> $env:GITHUB_ENV
+
+      - name: Build the portable application and installer
+        shell: pwsh
+        run: |
+          python tools/windows/build.py --work "$env:RUNNER_TEMP/rf-build" --out "$env:RUNNER_TEMP/rf-out" --makensis "$env:RF_MAKENSIS"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Expand-Archive "$env:RUNNER_TEMP/rf-out/ResumeForge-Windows-x64.zip" "$env:RUNNER_TEMP/ResumeForge smoke"
+
+      - name: Install the application as the current user
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'Installed ResumeForge'
+          $installer = "$env:RUNNER_TEMP/rf-out/ResumeForge-Setup-x64.exe"
+          $setup = Start-Process -FilePath $installer -ArgumentList "/S /D=$path" -PassThru -Wait
+          if ($setup.ExitCode -ne 0 -or -not (Test-Path "$path/ResumeForge.exe")) {
+            throw "Silent install failed with exit code $($setup.ExitCode)"
+          }
+
+      - name: Open and close the installed Windows application
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "$env:RUNNER_TEMP/Installed ResumeForge").Path
+          $null = Start-Process -FilePath "$root/ResumeForge.exe" -WorkingDirectory $env:RUNNER_TEMP -PassThru
+          $deadline = (Get-Date).AddSeconds(60)
+          do {
+            Start-Sleep -Milliseconds 250
+            $window = Get-Process -Name ResumeForge,pythonw -ErrorAction SilentlyContinue |
+              Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like '*ResumeForge*' -and $_.Path -and $_.Path.StartsWith("$root\", [StringComparison]::OrdinalIgnoreCase) } |
+              Select-Object -First 1
+          } until ($window -or (Get-Date) -ge $deadline)
+          if (-not $window) { throw 'The packaged executable did not display its native window.' }
+          Write-Output "Opened window: $($window.MainWindowTitle)"
+          if (-not $window.CloseMainWindow() -or -not $window.WaitForExit(15000)) {
+            throw 'Closing the main window did not exit the application.'
+          }
+          if ($window.ExitCode -ne 0) { throw "Application exited with $($window.ExitCode)" }
+
+      - name: Check native preview, PDF export and underfilled-draft rejection
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "$env:RUNNER_TEMP/ResumeForge smoke/ResumeForge").Path
+          $smoke = (Resolve-Path tools/windows/smoke_desktop.py).Path
+          Set-Location $env:RUNNER_TEMP
+          & "$root/runtime/python.exe" $smoke --package-root $root
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Check per-user uninstall
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "$env:RUNNER_TEMP/Installed ResumeForge").Path
+          $null = Start-Process -FilePath "$root/Uninstall.exe" -ArgumentList '/S' -PassThru -Wait
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Test-Path "$root/ResumeForge.exe") -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+          }
+          if (Test-Path "$root/ResumeForge.exe") { throw 'Uninstall did not remove the executable.' }
+
+      - name: Retain the tested distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResumeForge-Windows-x64
+          path: |
+            ${{ runner.temp }}/rf-out/ResumeForge-Windows-x64.zip
+            ${{ runner.temp }}/rf-out/ResumeForge-Setup-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
