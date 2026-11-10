@@ -84,20 +84,29 @@ jobs:
         shell: pwsh
         run: |
           $root = (Resolve-Path "$env:RUNNER_TEMP/Installed ResumeForge").Path
-          $null = Start-Process -FilePath "$root/ResumeForge.exe" -WorkingDirectory $env:RUNNER_TEMP -PassThru
+          $launcher = Start-Process -FilePath "$root/ResumeForge.exe" -WorkingDirectory $env:RUNNER_TEMP -PassThru
+          # Retain the process handle while it is alive so its exit status
+          # remains available after pythonw and the launcher both exit.
+          $null = $launcher.Handle
+          $pythonw = (Resolve-Path "$root/runtime/pythonw.exe").Path
           $deadline = (Get-Date).AddSeconds(60)
           do {
             Start-Sleep -Milliseconds 250
-            $window = Get-Process -Name ResumeForge,pythonw -ErrorAction SilentlyContinue |
-              Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like '*ResumeForge*' -and $_.Path -and $_.Path.StartsWith("$root\", [StringComparison]::OrdinalIgnoreCase) } |
+            $window = Get-Process -Name pythonw -ErrorAction SilentlyContinue |
+              Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -eq 'ResumeForge' -and $_.Path -eq $pythonw } |
               Select-Object -First 1
-          } until ($window -or (Get-Date) -ge $deadline)
-          if (-not $window) { throw 'The packaged executable did not display its native window.' }
-          Write-Output "Opened window: $($window.MainWindowTitle)"
-          if (-not $window.CloseMainWindow() -or -not $window.WaitForExit(15000)) {
-            throw 'Closing the main window did not exit the application.'
+          } until ($window -or $launcher.HasExited -or (Get-Date) -ge $deadline)
+          if (-not $window) {
+            # The GUI launcher cannot show an import traceback in the CI log.
+            # Exercise the same bundled imports and QPA initialization in a console.
+            & "$root/runtime/python.exe" -X faulthandler -c "from resumeforge.desktop_window import MainWindow; from PySide6.QtWidgets import QApplication; a=QApplication([]); print('Qt platform:', a.platformName()); from pathlib import Path; import tempfile; w=MainWindow(Path(tempfile.mkdtemp())); w.show(); a.processEvents(); print('Window:', w.windowTitle(), 'Visible:', w.isVisible())"
+            throw 'The installed pythonw process did not display the ResumeForge window.'
           }
-          if ($window.ExitCode -ne 0) { throw "Application exited with $($window.ExitCode)" }
+          Write-Output "Opened window: $($window.MainWindowTitle)"
+          if (-not $window.CloseMainWindow() -or -not $launcher.WaitForExit(15000)) {
+            throw 'Closing the main window did not exit the packaged application.'
+          }
+          if ($launcher.ExitCode -ne 0) { throw "Launcher exited with $($launcher.ExitCode)" }
 
       - name: Check native preview, PDF export and underfilled-draft rejection
         shell: pwsh
