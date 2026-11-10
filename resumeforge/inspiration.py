@@ -185,7 +185,9 @@ def _story_choices(keywords, count):
 
 _SYSTEM = """Write original, fictional resume accomplishments for the specified slots, in priority order.
 Treat the applicant's editing brief as editorial direction. Invent plausible projects, tools, concrete scope and results that illustrate the target work.
-Use each assigned priority in a meaningful action, and work in adjacent high-priority capabilities where appropriate.
+For each bullet, identify the task the target employer wants performed with the priority, then describe performing that task.
+Use the past role only to choose a plausible setting. A sentence about another use of the same tool misses the assignment.
+Connect the work to a visible artifact or decision and a measurable outcome. Prefer concrete counts and times to sweeping claims about quality or compliance.
 Given two target tools with similar names, use the actual capability requested. Spread different achievements across slots.
 For each numbered slot, write one concise bullet (15–30 words) and one detailed version (30–55 words) about the same accomplishment, with consistent metrics.
 Each pair should read like a finished resume bullet, start with an action verb and include at least one plausible numeric result or scope.

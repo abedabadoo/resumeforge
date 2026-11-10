@@ -4,8 +4,8 @@ from __future__ import annotations
 from pydantic import Field
 from .laptop import ask
 from .models import Keyword, Model
-from .planning import _evidence_for, analyze_job, keyword_matches
-from .priorities import literal_pattern, normalize, passages, score
+from .planning import _canonical, _evidence_for, analyze_job, keyword_matches
+from .priorities import capability, literal_pattern, normalize, passages, score
 
 
 class Requirement(Model):
@@ -26,6 +26,12 @@ For each capability quote a short exact passage from the posting which explicitl
 The candidate's existing skills must not determine which requirements are important."""
 
 
+def _capability_key(term):
+    canonical = _canonical(term)
+    group = capability(canonical)
+    return normalize(group.label if group else canonical)
+
+
 def analyze_posting(profile, job, keywords, settings):
     rows = analyze_job(profile, job, keywords)
     if settings.provider == "none" or not settings.model.strip() or not job.strip():
@@ -39,8 +45,12 @@ def analyze_posting(profile, job, keywords, settings):
     except (RuntimeError, OSError):
         return rows
 
-    by_label = {normalize(row["term"]): row for row in rows}
-    by_alias = {normalize(alias): row for row in rows for alias in row["terms"]}
+    by_label = {}
+    by_alias = {}
+    for row in rows:
+        primary = by_label.setdefault(_capability_key(row["term"]), row)
+        for alias in row["terms"]:
+            by_alias.setdefault(_capability_key(alias), primary)
     quoted_source = " ".join(excerpt.casefold().split())
     records = [(e.id, e.text) for e in profile.evidence().values() if e.confirmed and e.role_id]
     by_model = {}
@@ -48,7 +58,7 @@ def analyze_posting(profile, job, keywords, settings):
         quote = " ".join(finding.quote.split())
         if quote.casefold() not in quoted_source:
             continue
-        name = normalize(finding.capability)
+        name = _capability_key(finding.capability)
         row = by_label.get(name) or by_alias.get(name)
         if row is None:
             if not literal_pattern(finding.capability).search(quote):
@@ -59,27 +69,33 @@ def analyze_posting(profile, job, keywords, settings):
             _, weight, required, rationale = ranking
             target = Keyword(term=finding.capability, weight=weight, required=required, rationale=rationale)
             row = {**_evidence_for(target, records, profile.skills), "terms": [target.term]}
-            by_label[name] = row
         if not any(keyword_matches(quote, term) for term in [row["term"], *row["terms"]]):
             continue
-        key = normalize(row["term"])
+        key = _capability_key(row["term"])
+        by_label.setdefault(key, row)
         if key not in by_model:
             row["posting_quote"] = quote
             by_model[key] = len(by_model)
     if not by_model:
         return rows
-    explicit = [normalize(t) for t in keywords]
-    structural = {normalize(row["term"]): index for index, row in enumerate(rows)}
+    explicit = {_capability_key(t) for t in keywords}
+    structural = {}
+    for index, row in enumerate(rows):
+        structural.setdefault(_capability_key(row["term"]), index)
+
     def priority(row):
-        key = normalize(row["term"])
-        if key in explicit or row["rationale"] == "User requested priority.":
-            return 10 + 1 / (1 + structural.get(key, len(rows)))
+        key = _capability_key(row["term"])
         position = structural.get(key, len(rows))
+        if key in explicit or row["rationale"] == "User requested priority.":
+            return 2, -position
         base = 1 / (3 + position)
         support = .9 / (3 + by_model[key]) if key in by_model else 0
-        # A product listed as one acceptable example shouldn't eclipse a core
-        # responsibility just because the model recognized the brand name.
         if row["weight"] <= 2:
             support *= .25
-        return base + support
+        # Apply the model's ranking within each requirement tier. A new
+        # quoted requirement can enter the core tier on the same evidence as
+        # a known term. Optional suggestions cannot displace mandatory work.
+        core = row["required"] or row["weight"] == 5
+        return int(core), base + support
+
     return sorted(by_label.values(), key=priority, reverse=True)
