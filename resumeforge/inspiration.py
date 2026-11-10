@@ -109,6 +109,16 @@ def printable(text):
             not re.search(r"[\[\]{}<>\n\r]|\*\*|\?\s*$|^(?:[-*•]|\d+[.)])\s|\b(?:placeholder|TODO|insert here|fictional|hypothetical|sample bullet|made.up)\b", text, re.I))
 
 
+def _supports_adjacent_priority(text, target, priorities):
+    """Require a generated story to connect its tool to the broader target job."""
+    from .priorities import normalize, related
+    adjacent = [keyword for keyword in priorities
+                if normalize(keyword.term) != normalize(target)]
+    return (not adjacent or any(keyword_matches(text, keyword.term) or
+                                related(text, keyword.term)
+                                for keyword in adjacent))
+
+
 def _title(term):
     # Common capability labels begin a list with a capital. Keep product names intact.
     return term[:1].lower() + term[1:] if " " in term and term[:1].isupper() and term[1:].islower() else term
@@ -247,6 +257,7 @@ def add_examples(profile, plan, request):
             accepted = [text for text in (model_story.concise, model_story.detailed)
                         if printable(text) and re.search(r"\d", text)
                         and keyword_matches(text, term)
+                        and _supports_adjacent_priority(text, term, plan.keywords)
                         and all(not _same_accomplishment(text, old) for old in history)]
             if accepted:
                 variants, origin = accepted, "model-example"

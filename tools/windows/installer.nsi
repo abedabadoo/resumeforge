@@ -45,7 +45,7 @@ ready:
     CreateShortcut "$SMPROGRAMS\ResumeForge.lnk" "$INSTDIR\ResumeForge.exe"
     WriteRegStr HKCU "Software\ResumeForge" "InstallDir" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ResumeForge" "DisplayName" "ResumeForge"
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ResumeForge" "DisplayVersion" "0.4.0"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ResumeForge" "DisplayVersion" "0.4.1"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ResumeForge" "DisplayIcon" "$INSTDIR\ResumeForge.exe"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ResumeForge" "UninstallString" '"$INSTDIR\Uninstall.exe"'
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ResumeForge" "NoModify" 1

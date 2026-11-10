@@ -7,7 +7,8 @@ from unittest.mock import patch
 from pypdf import PdfReader
 
 from resumeforge.engine import run
-from resumeforge.inspiration import Stories
+from resumeforge.inspiration import Stories, _supports_adjacent_priority
+from resumeforge.models import Keyword
 from resumeforge.models import ModelSettings, Profile, RunRequest
 from resumeforge.planning import analyze_job
 
@@ -47,6 +48,14 @@ class InspirationTests(unittest.TestCase):
             for c in examples:
                 self.assertIn(c["text"], text)
             self.assertNotRegex(text.casefold(), r"fictional|placeholder|\[|\]")
+
+    def test_model_story_must_connect_the_tool_to_another_core_capability(self):
+        priorities = [Keyword(term="Claude Code CLI"), Keyword(term="CI/CD"),
+                      Keyword(term="SDLC automation")]
+        self.assertFalse(_supports_adjacent_priority(
+            "Used Claude Code CLI to draft 20 compliance controls.", "Claude Code CLI", priorities))
+        self.assertTrue(_supports_adjacent_priority(
+            "Used Claude Code CLI in CI/CD to reproduce 20 failing tests.", "Claude Code CLI", priorities))
 
     @patch("resumeforge.inspiration.ask")
     def test_configured_model_receives_reviewed_order_and_draft_is_editable(self, ask):
