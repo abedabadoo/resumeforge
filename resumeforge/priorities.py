@@ -18,6 +18,38 @@ class Capability:
 # Alternate expressions in a posting form one priority. Neighbors help identify
 # transferable experience but do not establish an exact match to that priority.
 CAPABILITIES = (
+    Capability("WAF administration", ("WAF administration", "WAF operations", "WAF management",
+        "web application firewall administration", "web application firewall operations",
+        "web application firewall", "web application firewalls", "Cloudflare WAF", "WAF",
+        "WAF policies", "WAF policy", "custom WAF rules", "custom rules", "traffic filtering",
+        "false-positive tuning", "false positive tuning", "rule tuning"),
+        ("Role-based Access Control", "RBAC", "OWASP ZAP", "TCP/IP", "AWS", "Microsoft Azure",
+         "Linux", "Unix", "REST APIs", "Vulnerability Analysis"), ("WAF", "web application firewall")),
+    Capability("Edge application delivery", ("edge application delivery", "application delivery",
+        "DNS", "domain name system", "HTTP", "HTTPS", "TLS", "SSL", "web protocols",
+        "reverse proxies", "reverse proxy", "proxies", "proxy", "CDN", "content delivery network",
+        "certificate provisioning", "origin health checks", "origin health", "load balancers",
+        "load balancing"),
+        ("TCP/IP", "REST APIs", "AWS", "Microsoft Azure", "Google Cloud Platform", "Linux", "Unix")),
+    Capability("WAF lifecycle and change management", ("WAF lifecycle and change management",
+        "WAF lifecycle", "WAF onboarding", "WAF offboarding", "application onboarding",
+        "application offboarding", "onboarding applications", "offboarding applications",
+        "application inventories", "application inventory", "configuration consistency",
+        "rollback readiness", "WAF change management", "maintenance windows", "signature updates",
+        "rule signature updates", "rule lifecycle"),
+        ("Infrastructure as Code", "IaC", "Terraform", "AWS", "Microsoft Azure", "ServiceNow",
+         "Role-based Access Control", "RBAC", "Linux", "Unix")),
+    Capability("DDoS and bot mitigation", ("DDoS and bot mitigation", "DDoS mitigation",
+        "distributed denial of service", "bot protection", "bot management", "rate limiting",
+        "OWASP Top 10 protections", "OWASP Top 10", "attack mitigation"),
+        ("OWASP ZAP", "Vulnerability Analysis", "Datadog", "Splunk", "SIEM", "TCP/IP", "AWS",
+         "Microsoft Azure", "Linux", "Unix")),
+    Capability("WAF monitoring and incident response", ("WAF monitoring and incident response",
+        "WAF monitoring", "WAF incident response", "WAF incidents", "traffic analysis",
+        "malicious traffic analysis", "attack investigation", "IP blocklisting", "IP blocklist",
+        "blocklisting", "blocklist", "SIEM", "Security Operations Center", "SOC operations"),
+        ("incident response", "logs", "runbooks", "on-call", "SLO alerts", "Datadog", "Splunk",
+         "OWASP ZAP", "TCP/IP", "Linux", "Unix")),
     Capability("Agentic engineering harnesses", ("agentic engineering harnesses", "agentic engineering harness",
         "agentic workflows", "agentic workflow", "AI orchestration frameworks", "AI orchestration",
         "AI agents", "agent-based architectures", "software development harnesses"),
@@ -85,13 +117,13 @@ class Passage:
 
 
 _HEADINGS = {
-    "preferred": r"(?:preferred|desirable|additional|bonus|nice[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
+    "preferred": r"(?:preferred|desirable|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
     "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|qualifications",
     "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|the role|your impact",
     "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|about (?:us|the company)|how to apply",
 }
 _EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
-_PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|bonus|a plus)\b", re.I)
+_PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|good[- ]to[- ]have|bonus|a plus)\b", re.I)
 _REQUIRED = re.compile(r"\b(?:must|required|essential|mandatory|minimum)\b", re.I)
 
 
@@ -164,8 +196,17 @@ def score(rows, phrases, cues=()):
     return points, weight, required, reason
 
 
-_DUTY_VERBS = r"build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare|administer|develop|lead|monitor|review|assess|support"
+_DUTY_VERBS = r"build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare|administer|develop|lead|monitor|review|assess|support|apply|configure|integrate|ensure|operate"
 _QUALIFIER = re.compile(r"^(?:(?:demonstrated|hands.on|strong|proven|working|practical|prior) +)*(?:(?:experience|proficiency|expertise|knowledge|skills?) (?:with|in|of) |skilled in )", re.I)
+_FRAGMENT_EDGE = re.compile(
+    r"^(?:and|or|with|for|to|of|in|on|at|by|from|as|into|across|using|including|such as)\b|"
+    r"\b(?:and|or|with|for|to|of|in|on|at|by|from|as|into|across|using|including|such)$", re.I)
+
+
+def valid_observed_phrase(phrase):
+    """Reject clipped prepositional fragments while retaining complete noun phrases."""
+    phrase = phrase.strip(" ,.;:()")
+    return bool(phrase and not _FRAGMENT_EDGE.search(phrase))
 
 
 def _listed_requirements(row):
@@ -183,6 +224,8 @@ def _listed_requirements(row):
     for part in parts:
         phrase = re.sub(r"^(?:and|or)\s+", "", _QUALIFIER.sub("", part.strip()), flags=re.I)
         phrase = re.sub(r"\s+(?:is |are )?(?:preferred|required|a plus)$", "", phrase, flags=re.I)
+        if not valid_observed_phrase(phrase):
+            continue
         if not 1 <= len(phrase.split()) <= 4 or not 3 <= len(phrase) <= 65:
             continue
         if re.search(r"\b(?:with|we|you|will|to|that|who|have|has|such|similar|equivalent|skills?|experience|solutions|platforms|systems|ability|ability to|working|degree|required|preferred|strong|proficiency|knowledge|years?|benefits|other|understanding|practices|functions|methodologies|technologies|qualifications)\b", phrase, re.I):
@@ -205,10 +248,10 @@ def observed_phrases(rows):
         # A short object after a concrete duty or requirement carries more
         # meaning than isolated bag-of-words fragments from the whole advert.
         for match in re.finditer(
-            r"\b(?:experience (?:with|in)|proficiency in|expertise in|knowledge of|skilled in|build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare)\s+"
+            r"\b(?:experience (?:with|in)|proficiency in|expertise in|knowledge of|skilled in|build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare|apply|configure|integrate|ensure|operate)\s+"
             r"([\w][\w /&-]{2,65}?)(?=\s+(?:and|or|for|with|to|across|that|using|such|including|while|within|in)\b|[,.;:(]|$)",row.text,re.I):
             phrase = re.sub(r"^(?:a|an|the|our)\s+", "", match[1], flags=re.I).strip()
-            if len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
+            if valid_observed_phrase(phrase) and len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
                 tokens.append(phrase)
         for text in tokens:
             if normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents"}:

@@ -94,7 +94,11 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if request.reviewed_priorities is None and request.settings.provider != "none" and request.job_description.strip():
             from .job_analysis import analyze_posting
             rows = analyze_posting(profile, request.job_description, request.keywords, request.settings)
-            edit_options["reviewed_priorities"] = [row["term"] for row in rows[:max(7, len(request.keywords))]]
+            explicit = {term.strip().casefold() for term in request.keywords if term.strip()}
+            actionable = [row for row in rows if row.get("kind") != "credential"
+                          or row["term"].casefold() in explicit]
+            edit_options["reviewed_priorities"] = [row["term"] for row in
+                                                     actionable[:max(7, len(request.keywords))]]
         baseline_settings = request.settings.model_copy(update={"provider": "none"})
         plan = build_plan(profile, request.job_description, request.keywords, baseline_settings, **edit_options)
         plan.proposed_claims = []

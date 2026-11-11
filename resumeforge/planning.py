@@ -40,6 +40,16 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "SDLC automation": ("SDLC automation", "software development lifecycle automation", "automated software development lifecycle",
                         "automate software development lifecycle"),
     "Infrastructure as Code": ("Infrastructure as Code", "IaC"),
+    "WAF": ("WAF", "Web Application Firewall", "Web Application Firewalls"),
+    "DNS": ("DNS", "Domain Name System"),
+    "HTTP": ("HTTP", "Hypertext Transfer Protocol"),
+    "HTTPS": ("HTTPS", "HTTP over TLS"),
+    "TLS": ("TLS", "Transport Layer Security"),
+    "CDN": ("CDN", "Content Delivery Network"),
+    "SIEM": ("SIEM", "Security Information and Event Management"),
+    "SOC": ("SOC", "Security Operations Center"),
+    "RBAC": ("RBAC", "Role-based Access Control", "Role Based Access Control"),
+    "SRE": ("SRE", "Site Reliability Engineering"),
     "MCP": ("MCP", "Model Context Protocol"), "RAG": ("RAG", "Retrieval-Augmented Generation"),
     "REST API": ("REST API", "REST APIs", "RESTful API", "RESTful APIs"),
     "GitHub Copilot": ("GitHub Copilot",),
@@ -91,6 +101,47 @@ def _normalized(text: str) -> str:
     return re.sub(r"\s+", " ", text.casefold().replace("–", "-").replace("—", "-")).strip()
 
 
+_CREDENTIAL = re.compile(
+    r"\b(?:associate(?:'?s)?|bachelor(?:'?s)?|baccalaureate|master(?:'?s)?|doctorate|ph\.?d\.?)\b"
+    r"|\b(?:college|university) degree\b|\bdegree (?:in|of)\b"
+    r"|\b(?:certification|certificate|licen[cs]e|licensed)\b", re.I)
+_FUNCTION_FRAGMENT = re.compile(
+    r"^(?:and|or|with|for|to|of|in|on|at|by|from|using|including|such as)\b"
+    r"|\b(?:and|or|with|for|to|of|in|on|at|by|from|using|including)$", re.I)
+
+
+def credential_requirement(term: str) -> bool:
+    """Identify education eligibility text before it reaches bullet writing."""
+    return bool(_CREDENTIAL.search(term.strip()))
+
+
+def valid_requirement_term(term: str) -> bool:
+    """Reject phrase-boundary debris while preserving real named capabilities."""
+    clean = " ".join(term.split())
+    return (2 <= len(clean) <= 100 and bool(re.search(r"[A-Za-z0-9+#]", clean))
+            and not _FUNCTION_FRAGMENT.search(clean))
+
+
+def _credential_tokens(text: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", text.casefold().replace("’", "'"))
+    normalized = {"bachelor" if word in {"bachelor", "bachelors"}
+                  else "master" if word in {"master", "masters"}
+                  else word for word in words}
+    return normalized - {"a", "an", "the", "degree", "of", "in"}
+
+
+def _credential_matches(text: str, requirement: str) -> bool:
+    needed = _credential_tokens(requirement)
+    present = _credential_tokens(text)
+    levels = {"associate", "bachelor", "baccalaureate", "master", "doctorate", "phd"}
+    requested_levels = needed & levels
+    present_levels = present & levels
+    if requested_levels and requested_levels.isdisjoint(present_levels):
+        return False
+    subject = needed - levels
+    return bool(requested_levels or subject) and subject <= present
+
+
 @lru_cache(maxsize=2048)
 def _pattern(term: str) -> str:
     escaped = re.escape(term.strip())
@@ -115,13 +166,21 @@ def keyword_matches(text: str, term: str) -> bool:
     if not term.strip():
         return False
     canonical = _canonical(term)
-    aliases = ALIASES.get(canonical, (term.strip(),))
+    cap = priorities_lib.capability(term)
+    aliases = ALIASES.get(canonical, cap.phrases if cap and priorities_lib.normalize(term) == priorities_lib.normalize(cap.label)
+                          else (term.strip(),))
     # A standalone lowercase 'go' is normally a verb, not the language.
     flags = 0 if canonical == "Go" else re.IGNORECASE
     if canonical == "Azure":
         text = re.sub(_pattern("Azure DevOps"), "", text, flags=re.I)
     if canonical == "GitHub":
         text = re.sub(_pattern("GitHub Copilot"), "", text, flags=re.I)
+    if canonical == "SOC":
+        # A Security Operations Center requirement is not satisfied by SOC 1/2
+        # audit work. Preserve any separate, explicit SOC operations wording.
+        text = re.sub(r"(?<![\w])SOC\s*(?:1|2)(?:\s+Type\s+(?:I|II|1|2))?(?![\w])", "", text, flags=re.I)
+    if _normalized(canonical) == "owasp":
+        text = re.sub(r"(?<![\w])OWASP\s+ZAP(?![\w])", "", text, flags=re.I)
     return any(re.search(_pattern(alias), text, flags) is not None for alias in aliases)
 
 
@@ -148,7 +207,7 @@ def rank_skills(profile: Profile, keywords: list[Keyword] | list[str]) -> list[s
     evidence = [e.text for e in profile.evidence().values() if e.confirmed and e.role_id]
     for term, _, kind in ranked_terms:
         canonical = _canonical(term)
-        if (not canonical or len(canonical) > 100 or kind == "strength"
+        if (not canonical or len(canonical) > 100 or kind in ("strength", "credential")
             or any(keyword_matches(term, strength) for strength in STRENGTHS)
             or any(keyword_matches(skill, term) for skill in clean)):
             continue
@@ -217,12 +276,15 @@ def _targets(profile, job, explicit):
     found_groups = set()
 
     def record(label, mentions, cues=(), kind="skill"):
+        if not valid_requirement_term(label):
+            return
         rank = priorities_lib.score(rows, mentions, cues)
         if rank is None:
             return
         points, weight, required, reason = rank
         display = _canonical(label)
         terms = list(dict.fromkeys(m for m in mentions if any(priorities_lib.locations(r, (m,)) for r in rows)))
+        kind = "credential" if credential_requirement(display) else kind
         targets[display.casefold()] = (points, Keyword(term=display, weight=weight, kind=kind, required=required,
                                                       rationale=reason), terms)
 
@@ -234,7 +296,9 @@ def _targets(profile, job, explicit):
         if cap.label == "AI-assisted development" and claude_mentioned:
             continue
         # Print the posting's label rather than adding a more specific technology.
-        label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation") else (
+        label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation",
+            "WAF administration", "Edge application delivery", "WAF lifecycle and change management",
+            "DDoS and bot mitigation", "WAF monitoring and incident response") else (
             cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
         phrases = cap.phrases
         if cap.label == "Claude Code CLI":
@@ -267,12 +331,17 @@ def _targets(profile, job, explicit):
             continue
         record(term, [term])
     for order, term in enumerate(explicit):
+        if not valid_requirement_term(term):
+            continue
         key = term.casefold()
         prev = targets.get(key)
-        keyword = prev[1] if prev else Keyword(term=term, kind="strength" if key in STRENGTHS else "tool" if term in ALIASES else "skill")
+        keyword = prev[1] if prev else Keyword(term=term, kind="credential" if credential_requirement(term)
+            else "strength" if key in STRENGTHS else "tool" if term in ALIASES else "skill")
         targets[key] = (1000-order, keyword.model_copy(update={"weight": max(4, keyword.weight),
             "rationale": "User requested priority."}), prev[2] if prev else [term])
-    return sorted(targets.values(), key=lambda item: -item[0])
+    # Eligibility requirements remain visible in analysis but follow the
+    # performable work capabilities used for tailoring.
+    return sorted(targets.values(), key=lambda item: (item[1].kind == "credential", -item[0]))
 
 
 def _keyword_plan(profile: Profile, job: str, explicit: list[str]) -> list[Keyword]:
@@ -281,7 +350,8 @@ def _keyword_plan(profile: Profile, job: str, explicit: list[str]) -> list[Keywo
 
 def _reviewed(profile, job, terms):
     """An edited shortlist replaces the posting's suggestions, in the supplied order."""
-    requested = list(dict.fromkeys(t.strip() for t in terms if t.strip() and len(t.strip()) <= 100))
+    requested = list(dict.fromkeys(t.strip() for t in terms
+                                  if t.strip() and len(t.strip()) <= 100 and valid_requirement_term(t)))
     options = {k.term.casefold(): k for k in _keyword_plan(profile, job, requested)}
     result = []
     for term in requested:
@@ -306,8 +376,13 @@ def _asserted_text(body):
         c, re.I))
 
 
-def _evidence_for(keyword, records, skills):
+def _evidence_for(keyword, records, skills, education=()):
     term = keyword.term
+    if keyword.kind == "credential":
+        matches = [degree for degree in education if _credential_matches(degree, term)]
+        return {**keyword.model_dump(), "evidence": "exact" if matches else "missing",
+                "evidence_ids": [], "exact_skills": [], "related_skills": [],
+                "exact_education": matches}
     exact = [eid for eid, body in records if keyword_matches(body, term)]
     linked = [eid for eid, body in records if eid not in exact and priorities_lib.related(body, term)]
     direct_skills = [s for s in skills if keyword_matches(s, term)]
@@ -320,7 +395,10 @@ def _evidence_for(keyword, records, skills):
 def analyze_job(profile, job_description, keywords=()):
     """Return ranked posting requirements and the original profile's evidence for each."""
     records = [(ev.id, _asserted_text(ev.text)) for ev in profile.evidence().values() if ev.confirmed and ev.role_id]
-    return [{**_evidence_for(kw, records, profile.skills), "terms": terms}
+    education = [" ".join(x for x in (item.degree, item.detail) if x) for item in profile.education]
+    if profile.certifications:
+        education.append(profile.certifications)
+    return [{**_evidence_for(kw, records, profile.skills, education), "terms": terms}
             for _, kw, terms in _targets(profile, job_description, keywords)]
 
 
@@ -335,7 +413,7 @@ def keyword_coverage(keywords, bullets, skills):
 def bullet_relevance(text, keywords):
     """Credit actual capability matches and discount transferable evidence."""
     return sum(kw.weight * (1 if keyword_matches(text, kw.term) else .36 if priorities_lib.related(text, kw.term) else 0)
-               for kw in keywords)
+               for kw in keywords if kw.kind != "credential")
 
 
 def selected_skills(profile, plan, settings, edit_request=""):

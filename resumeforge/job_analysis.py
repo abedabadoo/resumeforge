@@ -1,16 +1,19 @@
 """Combine posting structure with a local model's reading of the actual requirements."""
 from __future__ import annotations
 
+from typing import Literal
 from pydantic import Field
 from .laptop import ask
 from .models import Keyword, Model
-from .planning import _canonical, _evidence_for, analyze_job, keyword_matches
+from .planning import (_canonical, _evidence_for, analyze_job, credential_requirement,
+                       keyword_matches, valid_requirement_term)
 from .priorities import capability, literal_pattern, normalize, passages, score
 
 
 class Requirement(Model):
     capability: str = Field(min_length=2, max_length=100)
     quote: str = Field(min_length=8, max_length=310)
+    kind: Literal["capability", "credential", "strength"] = "capability"
 
 
 class Reading(Model):
@@ -22,6 +25,8 @@ how central they are to doing this job. Prioritize the title's specialty, requir
 and recurring responsibilities. Group alternative tools that demonstrate the same capability.
 Treat preferred qualifications and long lists of interchangeable products as secondary. You may
 choose an existing capability label or extract a specific phrase the initial list overlooked.
+Classify degrees, licenses and certifications as credentials; they are eligibility checks, not
+skills or accomplishment-writing targets. Reject clipped fragments such as "with application."
 For each capability quote a short exact passage from the posting which explicitly names it.
 The candidate's existing skills must not determine which requirements are important."""
 
@@ -53,6 +58,9 @@ def analyze_posting(profile, job, keywords, settings):
             by_alias.setdefault(_capability_key(alias), primary)
     quoted_source = " ".join(excerpt.casefold().split())
     records = [(e.id, e.text) for e in profile.evidence().values() if e.confirmed and e.role_id]
+    education = [" ".join(x for x in (item.degree, item.detail) if x) for item in profile.education]
+    if profile.certifications:
+        education.append(profile.certifications)
     by_model = {}
     for finding in reading.requirements:
         quote = " ".join(finding.quote.split())
@@ -60,15 +68,26 @@ def analyze_posting(profile, job, keywords, settings):
             continue
         name = _capability_key(finding.capability)
         row = by_label.get(name) or by_alias.get(name)
+        if row is not None and finding.kind == "credential" and row.get("kind") != "credential":
+            target = Keyword(term=row["term"], weight=row["weight"], required=row["required"],
+                             rationale=row["rationale"], kind="credential")
+            row = {**_evidence_for(target, records, profile.skills, education),
+                   "terms": row.get("terms", [target.term])}
+            by_label[_capability_key(row["term"])] = row
         if row is None:
+            if not valid_requirement_term(finding.capability):
+                continue
             if not literal_pattern(finding.capability).search(quote):
                 continue
             ranking = score(passages(job), [finding.capability])
             if not ranking:
                 continue
             _, weight, required, rationale = ranking
-            target = Keyword(term=finding.capability, weight=weight, required=required, rationale=rationale)
-            row = {**_evidence_for(target, records, profile.skills), "terms": [target.term]}
+            kind = "credential" if (finding.kind == "credential" or credential_requirement(finding.capability)) \
+                   else "strength" if finding.kind == "strength" else "skill"
+            target = Keyword(term=finding.capability, weight=weight, required=required,
+                             rationale=rationale, kind=kind)
+            row = {**_evidence_for(target, records, profile.skills, education), "terms": [target.term]}
         if not any(keyword_matches(quote, term) for term in [row["term"], *row["terms"]]):
             continue
         key = _capability_key(row["term"])
@@ -86,6 +105,8 @@ def analyze_posting(profile, job, keywords, settings):
     def priority(row):
         key = _capability_key(row["term"])
         position = structural.get(key, len(rows))
+        if row.get("kind") == "credential":
+            return -1, -(by_model.get(key, position) + position / 100)
         if key in explicit or row["rationale"] == "User requested priority.":
             return 2, -position
         base = 1 / (3 + position)

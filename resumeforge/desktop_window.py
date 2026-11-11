@@ -377,7 +377,12 @@ class MainWindow(QMainWindow):
         self._analyzed_job = job
         self._analysis = findings
         self._dirty = True
-        terms = list(dict.fromkeys([*existing, *(item["term"] for item in findings[:7])]))
+        # Credentials stay visible in the analysis, but a degree or eligibility
+        # requirement is not an experience-writing target. Preserve anything the
+        # user already entered while keeping automatic suggestions actionable.
+        suggested = [item["term"] for item in findings
+                     if item.get("kind") != "credential"][:7]
+        terms = list(dict.fromkeys([*existing, *suggested]))
         self.keywords.setPlainText("\n".join(terms))
         if terms and not self.brief.toPlainText().strip():
             self.brief.setPlainText(DEFAULT_BRIEF)
@@ -395,7 +400,8 @@ class MainWindow(QMainWindow):
         lines = []
         sources = self.profile.evidence()
         for index, item in enumerate(self._analysis, 1):
-            lines.append(f"{index}. {item['term']}   ·   {evidence_names[item['evidence']]}")
+            category = "   ·   Education/eligibility requirement" if item.get("kind") == "credential" else ""
+            lines.append(f"{index}. {item['term']}{category}   ·   {evidence_names[item['evidence']]}")
             if item.get("rationale"):
                 lines.append(item["rationale"])
             if item.get("posting_quote"):
@@ -404,6 +410,8 @@ class MainWindow(QMainWindow):
                 lines.append("Skills: " + ", ".join(item["exact_skills"]))
             if item.get("related_skills"):
                 lines.append("Related skills: " + ", ".join(item["related_skills"]))
+            if item.get("exact_education"):
+                lines.append("Education/certifications: " + ", ".join(item["exact_education"]))
             excerpt = next((sources[key].text for key in item.get("evidence_ids", []) if key in sources), None)
             if excerpt:
                 lines.append(f'From your resume: “{excerpt}”')

@@ -429,7 +429,10 @@ function sourceChanged() {
 function showAnalysis(rows) {
   analysisRows = rows;
   const labels = {exact: "Exact source match", related: "Related source evidence", missing: "Missing from source"};
-  $("analysis-list").replaceChildren(...rows.map(row => node("li", "", `${row.term} · ${labels[row.evidence] || "Unknown"}. ${row.rationale}`)));
+  $("analysis-list").replaceChildren(...rows.map(row => {
+    const category = row.kind === "credential" ? " · Education/eligibility requirement" : "";
+    return node("li", "", `${row.term}${category} · ${labels[row.evidence] || "Unknown"}. ${row.rationale}`);
+  }));
   $("analysis-detail").hidden = !rows.length;
   analysisKey = analysisInput();
   priorityJob = $("job-description").value.trim();
@@ -458,7 +461,8 @@ async function analyzePosting() {
     if (key !== analysisInput()) return;
     const rows = response.priorities;
     if (!keepList && previous === $("keywords").value) {
-      suggestedList = [...new Set([...requested, ...rows.slice(0, 7).map(row => row.term)])].join("\n");
+      const actionable = rows.filter(row => row.kind !== "credential").slice(0, 7).map(row => row.term);
+      suggestedList = [...new Set([...requested, ...actionable])].join("\n");
       $("keywords").value = suggestedList;
     }
     showAnalysis(rows);

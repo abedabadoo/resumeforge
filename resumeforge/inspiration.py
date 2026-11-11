@@ -32,6 +32,21 @@ class Example:
 # Pairs describe the same accomplishment at two measured lengths. The editor
 # can swap the amount of detail without inventing another number to fill a line.
 _LIBRARY = [
+    Example(r"WAF administration|Cloudflare WAF|web application firewall|custom WAF rules|traffic filtering|false.positive",
+            "Operated Cloudflare WAF across 50 applications, tuning managed and custom rules to reduce false-positive blocks by 38% while maintaining 99.9% availability.",
+            "Reviewed sampled requests with application owners and promoted rule changes through staged monitoring before enforcement."),
+    Example(r"Edge application delivery|application delivery|\bDNS\b|\bTLS\b|\bHTTPS?\b|\bCDN\b|proxies",
+            "Migrated DNS and TLS delivery for 200 application URLs, validating certificates, origins, proxies, and load balancers with zero unplanned cutover downtime.",
+            "Documented rollback checks for each onboarding wave and verified HTTP and HTTPS health before traffic migration."),
+    Example(r"WAF lifecycle|WAF onboarding|WAF offboarding|application onboarding|application inventories|configuration consistency|rollback readiness",
+            "Standardized WAF onboarding and offboarding for 42 applications, reconciling inventories and rollback plans before every approved production change.",
+            "Versioned configuration baselines and cut median change-validation time from 46 to 19 minutes."),
+    Example(r"DDoS|bot mitigation|bot protection|rate limiting|OWASP Top 10|attack mitigation",
+            "Implemented rate limits and bot controls that filtered 1.8 million suspicious requests during a traffic surge without blocking verified customer sessions.",
+            "Replayed representative OWASP Top 10 probes after each policy change and documented exceptions for application-owner review."),
+    Example(r"WAF monitoring|WAF incident|traffic analysis|attack investigation|blocklist|\bSIEM\b|Security Operations Center",
+            "Correlated WAF events with SIEM logs and blocklisted 37 abusive sources, reducing repeated malicious requests by 64% within one response cycle.",
+            "Published the investigation query and rollback steps in the incident runbook for SOC handoff."),
     Example(r"\bagentic\b|AI orchestration|engineering harness|AI agents?",
             "Built agentic engineering harnesses that routed failing builds to a code agent and tested its patches, cutting median triage time from 42 to 18 minutes.",
             "Engineers approved each proposed change before the harness reopened the deployment gate."),
@@ -109,10 +124,16 @@ def printable(text):
             not re.search(r"[\[\]{}<>\n\r]|\*\*|\?\s*$|^(?:[-*•]|\d+[.)])\s|\b(?:placeholder|TODO|insert here|fictional|hypothetical|sample bullet|made.up)\b", text, re.I))
 
 
+def _actionable(keywords):
+    from .planning import valid_requirement_term
+    return [keyword for keyword in keywords
+            if keyword.kind != "credential" and valid_requirement_term(keyword.term)]
+
+
 def _supports_adjacent_priority(text, target, priorities):
     """Require a generated story to connect its tool to the broader target job."""
     from .priorities import normalize, related
-    adjacent = [keyword for keyword in priorities
+    adjacent = [keyword for keyword in _actionable(priorities)
                 if normalize(keyword.term) != normalize(target)]
     return (not adjacent or any(keyword_matches(text, keyword.term) or
                                 related(text, keyword.term)
@@ -142,6 +163,9 @@ def _fallback(term, index):
 
 def _targets(profile, keywords):
     from .planning import bullet_relevance
+    keywords = _actionable(keywords)
+    if not keywords:
+        return []
     scored = []
     for role in profile.roles:
         role_score = max(bullet_relevance(b.text, keywords) for b in role.bullets) + bullet_relevance(role.title, keywords)
@@ -155,7 +179,7 @@ def _targets(profile, keywords):
 
 
 def _story_choices(keywords, count):
-    terms = [k.term for k in keywords]
+    terms = [k.term for k in _actionable(keywords)]
     pool = list(_LIBRARY)
     used = set()
     choices = []
@@ -206,20 +230,21 @@ Return plain text only. Leave out labels, brackets, notes, employer names, and a
 
 def add_examples(profile, plan, request):
     """Add a bounded set of slot alternatives, leaving the source profile intact."""
-    if not plan.keywords:
+    keywords = _actionable(plan.keywords)
+    if not keywords:
         return
-    targets = _targets(profile, plan.keywords)
-    choices = _story_choices(plan.keywords, len(targets))
+    targets = _targets(profile, keywords)
+    choices = _story_choices(keywords, len(targets))
     from .planning import bullet_relevance
     slots = []
     for term, example in choices:
-        requirement = [k for k in plan.keywords if k.term == term]
+        requirement = [k for k in keywords if k.term == term]
         def role_fit(target):
             role, _ = target
             return max(bullet_relevance(b.text, requirement) for b in role.bullets) + bullet_relevance(role.title, requirement)
         target = max(targets, key=role_fit)
         targets.remove(target)
-        if re.search(r"agentic", term, re.I) and any(k.term.casefold() in ("mcp","model context protocol") for k in plan.keywords):
+        if re.search(r"agentic", term, re.I) and any(k.term.casefold() in ("mcp","model context protocol") for k in keywords):
             example = Example("", "Built agentic engineering harnesses that retrieved build logs through Model Context Protocol (MCP), tested proposed fixes, and cut median triage time from 42 to 18 minutes.",
                               "Engineers approved each patch after comparing the replay with the last healthy build.")
         slots.append((target, (term, example)))
@@ -234,11 +259,11 @@ def add_examples(profile, plan, request):
             return {"term": term, "posting_terms": [p for p in phrases if any(locations(r, (p,)) for r in posting_rows)],
                     "requirement": max(rows, key=lambda row: len(set(_words(row)) & _words(term)), default="")[:330]}
         context = {"job": request.job_description[:3200], "editing_brief": request.edit_request,
-                   "priority_order": [k.term for k in plan.keywords[:20]],
+                   "priority_order": [k.term for k in keywords[:20]],
                    "requirements": [priority_context(term) for _, (term, _) in slots],
                    "slots": [{"slot": i, "role_title": role.title, "priority": term,
                               "role_context": [b.text[:250] for b in sorted(role.bullets,
-                                  key=lambda b: bullet_relevance(b.text, [k for k in plan.keywords if k.term == term]),
+                                  key=lambda b: bullet_relevance(b.text, [k for k in keywords if k.term == term]),
                                   reverse=True)[:3]]}
                              for i, ((role, _), (term, _)) in enumerate(slots, 1)]}
         try:
@@ -257,7 +282,7 @@ def add_examples(profile, plan, request):
             accepted = [text for text in (model_story.concise, model_story.detailed)
                         if printable(text) and re.search(r"\d", text)
                         and keyword_matches(text, term)
-                        and _supports_adjacent_priority(text, term, plan.keywords)
+                        and _supports_adjacent_priority(text, term, keywords)
                         and all(not _same_accomplishment(text, old) for old in history)]
             if accepted:
                 variants, origin = accepted, "model-example"

@@ -69,7 +69,10 @@ class Profile(Model):
 class Keyword(Model):
     term: str = Field(min_length=1, max_length=100)
     weight: int = Field(default=3, ge=1, le=5)
-    kind: Literal["tool", "skill", "strength", "domain"] = "skill"
+    # Credentials are legitimate eligibility requirements, but they are not
+    # work capabilities.  Keeping them typed prevents degree text from being
+    # sent to the accomplishment writer or printed in the Skills row.
+    kind: Literal["tool", "skill", "strength", "domain", "credential"] = "skill"
     required: bool = False
     rationale: str = ""
 
