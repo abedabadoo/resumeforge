@@ -14,7 +14,7 @@ def _launch_args(argv: list[str]) -> list[str]:
     """
     if sys.platform != "darwin":
         return list(argv)
-    return [arg for arg in argv if not re.fullmatch(r"-psn_\\d+_\\d+", arg)]
+    return [arg for arg in argv if not re.fullmatch(r"-psn_\d+_\d+", arg)]
 
 
 def default_data_dir() -> Path:
