@@ -299,21 +299,10 @@ def _targets(profile, job, explicit):
             continue
         if cap.label == "AI-assisted development" and claude_mentioned:
             continue
-        # Print the posting's label rather than adding a more specific technology.
-        label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation",
-            "WAF administration", "Edge application delivery", "WAF lifecycle and change management",
-            "DDoS and bot mitigation", "WAF monitoring and incident response",
-            "Product security architecture", "Security design reviews",
-            "Threat modeling and attack surface analysis", "Vulnerability management and remediation",
-            "Bug bounty triage", "Web application security", "Application security testing",
-            "Security champions and developer enablement", "Secure SDLC and security tooling",
-            "Product security technical leadership", "Cloud infrastructure security",
-            "Programming languages", "Security on-call",
-            "Cloud security telemetry and alerting infrastructure",
-            "Multi-cloud security engineering", "Unified SIEM and CNAPP threat visibility",
-            "Security data engineering and correlation", "AI-assisted detection engineering",
-            "Cloud security guardrails and detection coverage") else (
-            cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
+        # A capability has one canonical label, regardless of industry.
+        # Selection and importance still come from matched posting passages.
+        # Never maintain a per-job shortlist of labels to elevate.
+        label = cap.label
         phrases = cap.phrases
         if cap.label == "Claude Code CLI":
             phrases += priorities_lib.capability("AI-assisted development").phrases
