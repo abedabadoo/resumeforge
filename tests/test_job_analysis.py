@@ -36,8 +36,8 @@ Experience with Model Context Protocol (MCP)."""
         self.assertNotIn("data governance", terms)
         self.assertEqual(rows[0]["posting_quote"], findings.requirements[2].quote)
         self.assertTrue(all(terms.index(t) < terms.index("MCP")
-                            for t in ["infrastructure automation", "Programming and scripting"]))
-        infrastructure = next(r for r in rows if r["term"] == "infrastructure automation")
+                            for t in ["Infrastructure as Code", "Programming and scripting"]))
+        infrastructure = next(r for r in rows if r["term"] == "Infrastructure as Code")
         self.assertIn("AWS", infrastructure["related_skills"])
 
     def test_model_can_supply_a_required_capability_with_a_real_quote(self):
