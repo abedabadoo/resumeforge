@@ -6,6 +6,7 @@ on:
     branches:
       - fix/job-analysis-and-resume-quality
       - feature/deloitte-quality-and-mac-updater
+      - fix/generalized-job-requirements
   workflow_dispatch:
 
 permissions:
