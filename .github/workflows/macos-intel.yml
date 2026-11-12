@@ -1,0 +1,79 @@
+name: Intel macOS desktop download
+
+on:
+  push:
+    branches: [feature/mac-intel-desktop-download]
+  pull_request:
+    paths:
+      - '.github/workflows/macos-intel.yml'
+      - 'tools/macos/**'
+      - 'resumeforge/**'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac-intel:
+    name: Build and smoke-test native Intel macOS app
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+
+      - name: Assert native Intel runner
+        run: |
+          test "$(uname -m)" = "x86_64"
+          python -c "import platform; assert platform.machine() == 'x86_64'"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[desktop]' 'pyinstaller>=6.10,<7'
+
+      - name: Run Python unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build Mac app, ZIP and DMG
+        run: |
+          python tools/macos/build.py --work "$RUNNER_TEMP/resumeforge-mac-work" --out "$RUNNER_TEMP/resumeforge-mac-dist"
+
+      - name: Smoke-test packaged native application
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge" --package-smoke-test
+          lipo -archs "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge" | grep -qx x86_64
+          test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip"
+          test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg"
+
+      - name: Upload ZIP and DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResumeForge-macOS-Intel
+          path: |
+            ${{ runner.temp }}/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip
+            ${{ runner.temp }}/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Publish tested Intel Mac preview download
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/mac-intel-desktop-download'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="mac-intel-${GITHUB_SHA:0:8}"
+          gh release create "$tag" \
+            "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip" \
+            "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg" \
+            --target "$GITHUB_SHA" \
+            --title "ResumeForge for Intel Mac (preview ${GITHUB_SHA:0:8})" \
+            --notes-file tools/macos/RELEASE-NOTES.md \
+            --prerelease
