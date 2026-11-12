@@ -320,6 +320,19 @@ def _targets(profile, job, explicit):
                 not any(keyword_matches(row.text, term) for row in rows)):
             continue
         canon = _canonical(term)
+        # Do not turn an OR qualification (one programming language or one
+        # major cloud provider) into several missing mandatory technologies.
+        # Keep a vendor/language as its own requirement when a different
+        # passage explicitly names it as separate work.
+        language_choices = {"Python", "Ruby", "Java", "JavaScript", "TypeScript", "Go", "Rust"}
+        cloud_choices = {"AWS", "Azure", "Google Cloud"}
+        if canon in language_choices | cloud_choices and canon not in explicit:
+            alternate = (r"\b(?:at least one|one)\s+(?:modern\s+)?programming language\b"
+                         if canon in language_choices else
+                         r"\b(?:at least one|one)\s+major cloud provider\b")
+            mentioning = [row for row in rows if keyword_matches(row.text, canon)]
+            if mentioning and all(re.search(alternate, row.text, re.I) for row in mentioning):
+                continue
         # The target "GitHub Copilot" must not manufacture a GitHub requirement.
         spellings = ALIASES.get(canon, (term,))
         relevant_rows = [row for row in rows if keyword_matches(row.text, canon)]
