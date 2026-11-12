@@ -131,7 +131,9 @@ def analyze_posting(profile, job, keywords, settings):
         # A core responsibility it ranks highly must beat an unselected
         # mandatory keyword merely because that keyword has many aliases.
         if key in by_model:
-            return (1 if optional else 3), 1, -by_model[key]
+            # Explicit mandatory work selected by the reader outranks duties;
+            # selected duties still outrank unselected catalog matches.
+            return (1 if optional else 4 if row["required"] else 3), 1, -by_model[key]
         return (1 if optional else 2 if row["required"] or row["weight"] >= 4 else 1), 0, -position
 
     return sorted(by_label.values(), key=priority, reverse=True)
