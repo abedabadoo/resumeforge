@@ -275,7 +275,7 @@ class Typesetter:
             pages = len(pdf.pages)
             chars = [ch for p in pdf.pages for ch in p.chars if ch.get("text", "").strip()]
             extracted = "\n".join(p.extract_text() or "" for p in pdf.pages)
-            if re.search(r"\\(cid:\\d+\\)", extracted, re.I) or re.search(r"[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]", extracted):
+            if re.search(r"\(cid:\d+\)", extracted, re.I) or re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", extracted):
                 issues.append("PDF text contains an unmapped glyph or control character")
             for ch in chars:
                 if ch['x0'] < self.t.margin_left-.8 or ch['x1'] > self.t.page_width-self.t.margin_right+.8:
