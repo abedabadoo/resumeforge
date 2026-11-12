@@ -2,7 +2,7 @@ name: Intel macOS desktop download
 
 on:
   push:
-    branches: [feature/mac-intel-desktop-download, feature/deloitte-quality-and-mac-updater]
+    branches: [main]
   pull_request:
     paths:
       - '.github/workflows/macos-intel.yml'
@@ -101,7 +101,7 @@ jobs:
           compression-level: 0
 
       - name: Publish tested Intel Mac preview download
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/mac-intel-desktop-download' || github.ref == 'refs/heads/feature/deloitte-quality-and-mac-updater')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
