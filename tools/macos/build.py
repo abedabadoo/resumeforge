@@ -14,6 +14,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,7 +24,15 @@ DEMO_PROFILE = ROOT / "tools/windows/demo.profile.json"
 
 def execute(*args):
     print("+", " ".join(str(value) for value in args), flush=True)
-    return subprocess.run([str(value) for value in args], check=True, text=True, capture_output=True).stdout.strip()
+    result = subprocess.run([str(value) for value in args], text=True, capture_output=True)
+    if result.returncode:
+        # GitHub Actions previously hid hdiutil's actionable stderr; preserve
+        # both streams whenever a packaged macOS command fails.
+        print(result.stdout, file=sys.stderr, flush=True)
+        print(result.stderr, file=sys.stderr, flush=True)
+        raise subprocess.CalledProcessError(result.returncode, [str(value) for value in args],
+                                            result.stdout, result.stderr)
+    return result.stdout.strip()
 
 
 def dylib_dependencies(path: Path) -> list[str]:
@@ -33,7 +42,7 @@ def dylib_dependencies(path: Path) -> list[str]:
             for line in output.splitlines()[1:] if line.strip()]
 
 
-def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
+def build(out: Path, work: Path) -> tuple[Path, Path, Path | None]:
     if sys.platform != "darwin" or platform.machine() != "x86_64":
         raise RuntimeError("Build the Intel Mac package on a native x86_64 macOS runner.")
     if not DEMO_PROFILE.is_file():
@@ -147,8 +156,22 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
     dmg_path.unlink(missing_ok=True)
     # ditto preserves the symlinks and metadata in framework-based macOS apps.
     execute("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", app, zip_path)
-    execute("hdiutil", "create", "-ov", "-format", "UDZO",
-            "-volname", "ResumeForge Intel", "-srcfolder", app, dmg_path)
+    # DiskImages can fail transiently on shared macOS CI runners. The ZIP is a
+    # complete, independently installable .app and must not be lost when only
+    # optional DMG creation fails. Retry before publishing ZIP-only.
+    for attempt in range(3):
+        try:
+            execute("hdiutil", "create", "-ov", "-format", "UDZO",
+                    "-volname", "ResumeForge Intel", "-srcfolder", app, dmg_path)
+            if dmg_path.is_file() and dmg_path.stat().st_size > 0:
+                break
+        except subprocess.CalledProcessError:
+            dmg_path.unlink(missing_ok=True)
+            if attempt < 2:
+                time.sleep(5)
+    else:
+        print("WARNING: DMG could not be created; publishing a tested ZIP-only Mac download.",
+              file=sys.stderr, flush=True)
 
     with zipfile.ZipFile(zip_path) as archive:
         if archive.testzip() is not None:
@@ -156,8 +179,9 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
         if not any(path.startswith("ResumeForge.app/") for path in archive.namelist()):
             raise RuntimeError("The download is missing ResumeForge.app")
     for path in (zip_path, dmg_path):
-        print(f"{path.name}: {path.stat().st_size:,} bytes; sha256={hashlib.sha256(path.read_bytes()).hexdigest()}")
-    return app, zip_path, dmg_path
+        if path.is_file():
+            print(f"{path.name}: {path.stat().st_size:,} bytes; sha256={hashlib.sha256(path.read_bytes()).hexdigest()}")
+    return app, zip_path, dmg_path if dmg_path.is_file() else None
 
 
 if __name__ == "__main__":
