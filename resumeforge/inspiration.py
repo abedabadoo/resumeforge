@@ -228,7 +228,7 @@ def _targets(profile, keywords):
     return [(role, bullet) for _, _, role, bullet in scored[:count]]
 
 
-def _story_choices(keywords, count):
+def _story_choices(keywords, count, *, use_offline_examples=True):
     terms = [k.term for k in _actionable(keywords)]
     pool = list(_LIBRARY)
     used = set()
@@ -240,7 +240,10 @@ def _story_choices(keywords, count):
             continue
         if len(choices) >= count:
             break
-        matched = next((e for e in pool if re.search(e.signals, term, re.I)), None)
+        # A local model drafts from each new posting. The historical
+        # hand-written examples are optional offline demonstrations only;
+        # never fall back to the last benchmark job when model output fails.
+        matched = next((e for e in pool if re.search(e.signals, term, re.I)), None) if use_offline_examples else None
         if matched is None and any(re.search(e.signals, term, re.I) for e in used):
             continue
         if matched:
@@ -274,7 +277,7 @@ Use the past role only to choose a plausible setting. A sentence about another u
 Avoid generic phrases such as 'tracked outcomes for KEYWORD', 'pilot for KEYWORD' and
 'quality checks for KEYWORD'. Integrate each capability naturally into a specific
 technical action and name the system, review, artifact, or decision involved.
-Do not conflate OWASP testing with DDoS mitigation or substitute a neighboring product.
+Do not substitute a related but different task, tool, credential, or outcome merely because its wording overlaps the requirement.
 Connect the work to a visible artifact or decision and a measurable outcome. Prefer concrete counts and times to sweeping claims about quality or compliance.
 Given two target tools with similar names, use the actual capability requested. Spread different achievements across slots.
 For each numbered slot, write one concise bullet (15–30 words) and one detailed version (30–55 words) about the same accomplishment, with consistent metrics.
@@ -288,7 +291,7 @@ def add_examples(profile, plan, request):
     if not keywords:
         return
     targets = _targets(profile, keywords)
-    choices = _story_choices(keywords, len(targets))
+    choices = _story_choices(keywords, len(targets), use_offline_examples=request.settings.provider == 'none')
     from .planning import bullet_relevance
     slots = []
     for term, example in choices:
