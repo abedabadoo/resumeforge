@@ -20,15 +20,16 @@ class Reading(Model):
     requirements: list[Requirement] = Field(max_length=8)
 
 
-_SYSTEM = """Read the posting as a hiring manager. Rank up to seven distinct capabilities by
-how central they are to doing this job. Prioritize the title's specialty, required hands-on work,
-and recurring responsibilities. Group alternative tools that demonstrate the same capability.
-Treat preferred qualifications and long lists of interchangeable products as secondary. You may
-choose an existing capability label or extract a specific phrase the initial list overlooked.
-Classify degrees, licenses and certifications as credentials; they are eligibility checks, not
-skills or accomplishment-writing targets. Reject clipped fragments such as "with application."
-For each capability quote a short exact passage from the posting which explicitly names it.
-The candidate's existing skills must not determine which requirements are important."""
+_SYSTEM = """Analyze ONLY the supplied hiring requirements. Rank up to seven distinct
+job capabilities, prioritizing the specialty, hands-on responsibilities, and required
+skills. Group alternative tools and languages into one OR requirement, not several
+mandatory missing skills. Keep preferred qualifications lower than core duties.
+Classify degrees, licenses and certifications separately from performable capabilities.
+Ignore compensation, benefits, privacy disclosures, tracking codes, and recruiting
+boilerplate. Never reuse requirements from a previous job or infer them from the
+candidate resume. Reject fragments such as 'with application' and 'are multiplied'.
+For every requirement supply an exact supporting quotation from the given posting.
+Quote actual requirements; do not invent or paraphrase the quoted text."""
 
 
 def _capability_key(term):
@@ -41,9 +42,10 @@ def analyze_posting(profile, job, keywords, settings):
     rows = analyze_job(profile, job, keywords)
     if settings.provider == "none" or not settings.model.strip() or not job.strip():
         return rows
-    # Pass only posting content. Sample the beginning and the qualifications at
-    # the end when a posting would otherwise overflow a small local context.
-    excerpt = job if len(job) <= 12000 else job[:8000] + "\n…\n" + job[-4000:]
+    # Exclude non-hiring sections before sending context to the model. Sending
+    # the raw tail of a long job advert previously amplified salary/privacy text.
+    cleaned = "\n".join(row.text for row in passages(job))
+    excerpt = cleaned[:12000]
     try:
         reading = ask(settings, Reading, _SYSTEM,
                       {"posting": excerpt, "existing_capabilities": [row["term"] for row in rows[:28]]}, 850)
@@ -111,7 +113,7 @@ def analyze_posting(profile, job, keywords, settings):
             return 2, -position
         base = 1 / (3 + position)
         support = .9 / (3 + by_model[key]) if key in by_model else 0
-        if row["weight"] <= 2:
+        if row["weight"] <= 3:
             support *= .25
         # Apply the model's ranking within each requirement tier. A new
         # quoted requirement can enter the core tier on the same evidence as
