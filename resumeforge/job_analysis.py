@@ -66,7 +66,9 @@ def analyze_posting(profile, job, keywords, settings):
     by_model = {}
     for finding in reading.requirements:
         quote = " ".join(finding.quote.split())
-        if quote.casefold() not in quoted_source:
+        # Passage parsing normalizes terminal punctuation, but the model may
+        # legitimately quote the original sentence including its final period.
+        if quote.casefold().rstrip(" .") not in quoted_source:
             continue
         name = _capability_key(finding.capability)
         row = by_label.get(name) or by_alias.get(name)
