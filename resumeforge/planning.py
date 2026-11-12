@@ -323,7 +323,7 @@ def _targets(profile, job, explicit):
         mentions = [row for row in rows if keyword_matches(row.text, canon)]
         return bool(mentions and all(re.search(group, row.text, re.I) for row in mentions))
 
-    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS, *profile.skills]))
+    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS]))
     for term in known:
         if (len(term) > 100 or priorities_lib.normalize(term) in found_groups or
                 alternative_example(term) or
