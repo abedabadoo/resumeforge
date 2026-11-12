@@ -18,6 +18,72 @@ class Capability:
 # Alternate expressions in a posting form one priority. Neighbors help identify
 # transferable experience but do not establish an exact match to that priority.
 CAPABILITIES = (
+
+    # Product security is its own discipline, not a synonym for perimeter WAF
+    # operations. Each family captures job responsibilities and transferable
+    # evidence, while related terms are not treated as exact experience.
+    Capability("Product security architecture", (
+        "product security architecture", "security architecture for", "define security architecture",
+        "security architecture", "secure-by-default", "reference implementations",
+        "security patterns", "product security", "application security architecture"),
+        ("AWS", "Google Cloud", "Microsoft Azure", "Infrastructure as Code", "security design reviews",
+         "threat modeling", "web application security")),
+    Capability("Security design reviews", (
+        "security engineering reviews", "security design reviews", "security design review",
+        "security reviews for", "high-risk product features", "design tradeoffs",
+        "security design tradeoffs", "architecture reviews"),
+        ("code review", "AI code-review", "OWASP ZAP", "risk reviews", "secure SDLC")),
+    Capability("Threat modeling and attack surface analysis", (
+        "threat modeling and attack surface analysis", "threat modeling", "threat modelling",
+        "attack surface analysis", "attack surface", "threat models", "trust boundaries"),
+        ("OWASP ZAP", "Vulnerability Analysis", "security reviews", "risk assessments")),
+    Capability("Vulnerability management and remediation", (
+        "vulnerability management", "vulnerability remediation", "systemic classes of vulnerability",
+        "remediation of systemic", "vulnerability triage", "vulnerability prioritization",
+        "internal security reports", "security reports"),
+        ("bug bounty", "vulnerability scanning", "remediation tracking", "OWASP ZAP",
+         "Vulnerability Analysis", "security findings")),
+    Capability("Bug bounty triage", (
+        "bug bounty triage", "bug bounty submissions", "bug bounty platforms",
+        "bug bounty program", "bug bounty", "bug bounty reports"),
+        ("vulnerability triage", "vulnerability scanning", "remediation tracking",
+         "Vulnerability Analysis")),
+    Capability("Web application security", (
+        "web application security", "web application security principles",
+        "common attack vectors", "OWASP Top 10", "web attacks",
+        "product/application security", "application security"),
+        ("OWASP ZAP", "Burp Suite", "DAST", "SAST", "vulnerability scanning", "REST APIs")),
+    Capability("Application security testing", (
+        "application testing tools", "application security testing",
+        "web application testing", "Burp Suite", "OWASP ZAP", "browser developer tools",
+        "SAST tools", "SAST", "DAST", "Semgrep", "Snyk", "Cycode"),
+        ("OWASP ZAP", "vulnerability scanning", "code review", "security testing")),
+    Capability("Security champions and developer enablement", (
+        "security champions program", "security champions", "developer security training",
+        "product security training", "developer enablement", "developer training",
+        "mentor other engineers", "security training programs"),
+        ("playbook", "trained", "mentored", "engineering documentation", "code-review tools")),
+    Capability("Secure SDLC and security tooling", (
+        "secure SDLC", "secure software development lifecycle", "secure development",
+        "SDLC best practices", "security services and tooling",
+        "security tooling consumed by product teams", "developer security tooling"),
+        ("GitHub Actions", "CI/CD", "OWASP ZAP", "code review", "automation", "Git")),
+    Capability("Product security technical leadership", (
+        "lead security engineering reviews", "engineering leadership",
+        "authoritative technical voice", "technical voice on product security",
+        "mentor other engineers", "mentoring engineers", "design tradeoffs"),
+        ("leadership", "stakeholder coordination", "security review playbook", "training")),
+    Capability("Cloud infrastructure security", (
+        "cloud infrastructure security", "cloud infrastructure", "cloud security",
+        "container technologies", "container security", "major cloud provider",
+        "one major cloud provider"),
+        ("AWS", "Google Cloud Platform", "GCP", "Microsoft Azure", "Docker",
+         "Terraform", "Infrastructure as Code", "IaC", "Linux/Unix")),
+    Capability("Programming languages", (
+        "modern programming language", "programming language", "at least one modern programming language"),
+        ("Python", "Ruby", "Java", "Kotlin", "TypeScript", "JavaScript")),
+    Capability("Security on-call", ("security on-call", "on-call rotation", "security on-call rotation"),
+        ("incident response", "runbooks", "on-call", "SLO alerts")),
     Capability("WAF administration", ("WAF administration", "WAF operations", "WAF management",
         "web application firewall administration", "web application firewall operations",
         "web application firewall", "web application firewalls", "Cloudflare WAF", "WAF",
@@ -41,7 +107,7 @@ CAPABILITIES = (
          "Role-based Access Control", "RBAC", "Linux", "Unix")),
     Capability("DDoS and bot mitigation", ("DDoS and bot mitigation", "DDoS mitigation",
         "distributed denial of service", "bot protection", "bot management", "rate limiting",
-        "OWASP Top 10 protections", "OWASP Top 10", "attack mitigation"),
+        "attack mitigation", "volumetric attacks"),
         ("OWASP ZAP", "Vulnerability Analysis", "Datadog", "Splunk", "SIEM", "TCP/IP", "AWS",
          "Microsoft Azure", "Linux", "Unix")),
     Capability("WAF monitoring and incident response", ("WAF monitoring and incident response",
@@ -118,9 +184,9 @@ class Passage:
 
 _HEADINGS = {
     "preferred": r"(?:preferred|desirable|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
-    "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|qualifications",
+    "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|you should have|must[- ]have(?: technical/functional skills)?|qualifications",
     "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|the role|your impact",
-    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|about (?:us|the company)|how to apply",
+    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company|flexport)|how to apply|how we work|why this role is special|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
 }
 _EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
 _PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|good[- ]to[- ]have|bonus|a plus)\b", re.I)
@@ -254,6 +320,6 @@ def observed_phrases(rows):
             if valid_observed_phrase(phrase) and len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
                 tokens.append(phrase)
         for text in tokens:
-            if normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents"}:
+            if normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents", "applicants", "gdpr", "ccpa", "li-va1", "psi", "salaries", "salary", "pay range", "are multiplied"}:
                 seen.setdefault(normalize(text), text)
     return list(seen.values())
