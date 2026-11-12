@@ -50,6 +50,10 @@ def _smoke_test() -> int:
         app.processEvents()
         if not window.isVisible() or window.windowTitle() != "ResumeForge":
             raise RuntimeError("The packaged desktop window did not become visible")
+        from PySide6.QtWidgets import QPushButton
+        updates = window.findChild(QPushButton, "updateButton")
+        if updates is None or not updates.isVisible() or not updates.isEnabled():
+            raise RuntimeError("The installed Mac app has no usable update control")
         window.close()
         app.processEvents()
     _record("Packaged UI smoke test passed")
