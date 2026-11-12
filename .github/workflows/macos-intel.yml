@@ -55,6 +55,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge" --package-smoke-test
+          "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge" --full-launch-smoke-test -psn_0_12345
+          grep -q "Regular launch probe passed" "$HOME/Library/Logs/ResumeForge/startup.log"
           lipo -archs "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge" | grep -qx x86_64
           test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip"
           test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg"
