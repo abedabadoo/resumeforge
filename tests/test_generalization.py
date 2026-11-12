@@ -133,6 +133,30 @@ Experience managing service-quality escalations."""
         self.assertFalse(grounded_label("Network penetration testing",
                                         "Prepare quarterly tax filings and reconcile cash accounts"))
 
+    def test_priorities_are_independent_of_candidate_skills(self):
+        posting = POSTINGS["logistics"]
+        first = empty_profile()
+        second = empty_profile()
+        second.skills = ["CargoWise", "Custom Transport Dashboard", "SQL", "Excel",
+                         "Customer support", "Fleet maintenance", "HIPAA"]
+        self.assertEqual(
+            [(r["term"], r["weight"], r["required"]) for r in analyze_job(first, posting)],
+            [(r["term"], r["weight"], r["required"]) for r in analyze_job(second, posting)])
+
+    def test_model_ranked_responsibility_beats_unselected_required_tool(self):
+        posting = """Warehouse Operations Lead
+Responsibilities
+Coordinate shift handoffs and inspect shipment exceptions.
+Required qualifications
+Experience with Excel."""
+        reading = Reading(requirements=[Requirement(
+            capability="shift handoffs",
+            quote="Coordinate shift handoffs and inspect shipment exceptions.")])
+        with patch("resumeforge.job_analysis.ask", return_value=reading):
+            analysis = analyze_posting(empty_profile(), posting, [],
+                                       ModelSettings(provider="ollama", model="test"))
+        self.assertEqual(analysis[0]["term"], "shift handoffs")
+
     def test_job_content_cannot_prioritize_compensation(self):
         posting = """Office Administrator
 Responsibilities
