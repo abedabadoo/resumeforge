@@ -183,12 +183,11 @@ def _actionable(keywords):
 
 def _supports_adjacent_priority(text, target, priorities):
     """Require a generated story to connect its tool to the broader target job."""
-    from .priorities import normalize, related
-    adjacent = [keyword for keyword in _actionable(priorities)
-                if normalize(keyword.term) != normalize(target)]
-    return (not adjacent or any(keyword_matches(text, keyword.term) or
-                                related(text, keyword.term)
-                                for keyword in adjacent))
+    # An accomplishment can be compelling when it demonstrates only one
+    # important qualification. Do not reject a fully grounded result merely
+    # because it lacks an unrelated second keyword from a large posting.
+    from .requirement_extraction import grounded_label
+    return keyword_matches(text, target) or grounded_label(target, text)
 
 
 def _title(term):
@@ -208,7 +207,12 @@ def _awkward_label_paste(text, term):
     if len(term.split()) < 3:
         return False
     label = re.escape(term).replace(r"\ ", r"\s+")
-    return bool(re.search(r"\b(?:for|about|across|regarding|around)\s+" + label + r"\b", text, re.I))
+    # Check the generic accomplishment template, not ordinary grammatical
+    # uses such as "built tooling for clinical assessment".
+    generic = (r"^(?:tracked outcomes|designed a pilot|standardized quality checks|"
+               r"improved processes|implemented improvements)\s+"
+               r"(?:for|about|across|regarding|around)\s+")
+    return bool(re.search(generic + label + r"\b", text, re.I))
 
 
 def _targets(profile, keywords):
@@ -338,9 +342,8 @@ def add_examples(profile, plan, request):
         if model_story:
             accepted = [text for text in (model_story.concise, model_story.detailed)
                         if printable(text) and re.search(r"\d", text)
-                        and keyword_matches(text, term)
-                        and not _awkward_label_paste(text, term)
                         and _supports_adjacent_priority(text, term, keywords)
+                        and not _awkward_label_paste(text, term)
                         and all(not _same_accomplishment(text, old) for old in history)]
             if accepted:
                 variants, origin = accepted, "model-example"
