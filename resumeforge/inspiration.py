@@ -32,6 +32,39 @@ class Example:
 # Pairs describe the same accomplishment at two measured lengths. The editor
 # can swap the amount of detail without inventing another number to fill a line.
 _LIBRARY = [
+    Example(r"product security architecture|security architecture|secure.by.default|reference implementations",
+            "Defined secure-by-default architecture patterns for six product services, standardizing authentication and service boundary controls ahead of engineering release.",
+            "Reviewed high-risk exceptions with application owners and documented reusable security reference implementations."),
+    Example(r"security design reviews|security engineering reviews|design tradeoffs|architecture reviews",
+            "Established a product security design review playbook and trained eight engineers to evaluate common authentication, authorization, and data-flow risks.",
+            "Escalated higher-risk architectural tradeoffs and documented consistent review decisions for subsequent features."),
+    Example(r"threat modeling|attack surface analysis|attack surface|threat models",
+            "Led threat modeling across six product integrations, identifying twelve recurring attack paths and prioritizing design fixes before release.",
+            "Mapped trust boundaries, authentication flows, and exposed interfaces with developers and tracked outstanding design risks."),
+    Example(r"vulnerability management|systemic remediation|vulnerability remediation|security reports",
+            "Analyzed recurring vulnerability classes across fourteen applications, prioritized systemic fixes, and reduced repeated findings by 22%.",
+            "Worked with product owners to verify remediation and revise shared protections instead of closing duplicate tickets individually."),
+    Example(r"bug bounty triage|bug bounty submissions|bug bounty platforms|bug bounty",
+            "Standardized reproduction and severity triage for 200 bug bounty reports, reducing median time to disposition from four weeks to one.",
+            "Introduced consistent reproduction notes and escalation criteria for high-severity application security issues."),
+    Example(r"web application security|OWASP Top 10|common attack vectors",
+            "Expanded application security reviews across OWASP Top 10 risk classes, documenting reproducible findings and prioritizing fixes with product teams.",
+            "Included request traces and risk rationale so engineers could reproduce and resolve underlying security weaknesses."),
+    Example(r"application security testing|Burp Suite|OWASP ZAP|SAST|DAST",
+            "Deployed recurring application security testing against production web services, routing three to five findings per scan into remediation tracking.",
+            "Documented reproduction steps and test coverage with service owners to reduce repeated security findings."),
+    Example(r"developer security enablement|security champions|developer security training|product security training",
+            "Launched a security champions pilot across three engineering teams, training eight developers on secure design reviews and vulnerability escalation.",
+            "Published review examples for recurring design risks and maintained an escalation route for complex cases."),
+    Example(r"secure SDLC|security tooling|software development lifecycle",
+            "Integrated automated security checks into development workflows, routing recurring findings to service owners before release approval.",
+            "Defined review gates and documented exceptions so developers could correct issues without unnecessary handoffs."),
+    Example(r"product security technical leadership|technical voice on product security",
+            "Led product security design decisions across three engineering teams, documenting reusable criteria and mentoring eight engineers on complex reviews.",
+            "Presented architecture tradeoffs to service owners and incorporated approved decisions into shared guidance."),
+    Example(r"cloud infrastructure security|cloud infrastructure|container security|major cloud provider",
+            "Hardened AWS compute and identity configurations, resolving recurring high-severity cloud security findings ahead of quarterly reviews.",
+            "Added infrastructure-as-code checks for resource access, workload metadata protections, and encryption settings."),
     Example(r"WAF administration|Cloudflare WAF|web application firewall|custom WAF rules|traffic filtering|false.positive",
             "Operated Cloudflare WAF across 50 applications, tuning managed and custom rules to reduce false-positive blocks by 38% while maintaining 99.9% availability.",
             "Reviewed sampled requests with application owners and promoted rule changes through staged monitoring before enforcement."),
@@ -41,7 +74,7 @@ _LIBRARY = [
     Example(r"WAF lifecycle|WAF onboarding|WAF offboarding|application onboarding|application inventories|configuration consistency|rollback readiness",
             "Standardized WAF onboarding and offboarding for 42 applications, reconciling inventories and rollback plans before every approved production change.",
             "Versioned configuration baselines and cut median change-validation time from 46 to 19 minutes."),
-    Example(r"DDoS|bot mitigation|bot protection|rate limiting|OWASP Top 10|attack mitigation",
+    Example(r"DDoS|bot mitigation|bot protection|rate limiting|attack mitigation",
             "Implemented rate limits and bot controls that filtered 1.8 million suspicious requests during a traffic surge without blocking verified customer sessions.",
             "Replayed representative OWASP Top 10 probes after each policy change and documented exceptions for application-owner review."),
     Example(r"WAF monitoring|WAF incident|traffic analysis|attack investigation|blocklist|\bSIEM\b|Security Operations Center",
@@ -146,19 +179,18 @@ def _title(term):
 
 
 def _fallback(term, index):
-    label = _title(term)
-    frames = [
-        (f"Designed a pilot for {label} across 3 teams and reduced the median time to resolve follow-up requests from 5 days to 2.",
-         "Reviewed delayed cases with process owners and documented the changes before expanding the pilot."),
-        (f"Developed a playbook for {label} and trained 8 colleagues to handle the 4 most frequent exceptions independently.",
-         "Compared escalation logs before and after the rollout to identify cases that still needed specialist support."),
-        (f"Standardized quality checks for {label} across 6 projects and caught 12 recurring defects before handoff.",
-         "Published worked examples for the two failure patterns that appeared most often."),
-        (f"Tracked outcomes for {label} across 14 assignments and used weekly reviews to cut repeat work by 22%.",
-         "Assigned an owner to each open issue and recorded the change that resolved it."),
-    ]
-    concise, detail = frames[index % len(frames)]
-    return Example("", concise, detail)
+    # Unrecognized technical capabilities require a contextual model-written
+    # achievement, rather than templating an arbitrary phrase into a generic
+    # 'designed a pilot for KEYWORD' sentence.
+    return Example("", "", "")
+
+
+def _awkward_label_paste(text, term):
+    """Detect generic target-keyword grafting into otherwise vague prose."""
+    if len(term.split()) < 3:
+        return False
+    label = re.escape(term).replace(r"\ ", r"\s+")
+    return bool(re.search(r"\b(?:for|about|across|regarding|around)\s+" + label + r"\b", text, re.I))
 
 
 def _targets(profile, keywords):
@@ -221,6 +253,10 @@ _SYSTEM = """Write original, fictional resume accomplishments for the specified 
 Treat the applicant's editing brief as editorial direction. Invent plausible projects, tools, concrete scope and results that illustrate the target work.
 For each bullet, identify the task the target employer wants performed with the priority, then describe performing that task.
 Use the past role only to choose a plausible setting. A sentence about another use of the same tool misses the assignment.
+Avoid generic phrases such as 'tracked outcomes for KEYWORD', 'pilot for KEYWORD' and
+'quality checks for KEYWORD'. Integrate each capability naturally into a specific
+technical action and name the system, review, artifact, or decision involved.
+Do not conflate OWASP testing with DDoS mitigation or substitute a neighboring product.
 Connect the work to a visible artifact or decision and a measurable outcome. Prefer concrete counts and times to sweeping claims about quality or compliance.
 Given two target tools with similar names, use the actual capability requested. Spread different achievements across slots.
 For each numbered slot, write one concise bullet (15–30 words) and one detailed version (30–55 words) about the same accomplishment, with consistent metrics.
@@ -258,7 +294,7 @@ def add_examples(profile, plan, request):
             rows = [row.text for row in posting_rows if locations(row, phrases)]
             return {"term": term, "posting_terms": [p for p in phrases if any(locations(r, (p,)) for r in posting_rows)],
                     "requirement": max(rows, key=lambda row: len(set(_words(row)) & _words(term)), default="")[:330]}
-        context = {"job": request.job_description[:3200], "editing_brief": request.edit_request,
+        context = {"job": "\n".join(row.text for row in posting_rows)[:5000], "editing_brief": request.edit_request,
                    "priority_order": [k.term for k in keywords[:20]],
                    "requirements": [priority_context(term) for _, (term, _) in slots],
                    "slots": [{"slot": i, "role_title": role.title, "priority": term,
@@ -276,18 +312,22 @@ def add_examples(profile, plan, request):
     history = [b.text for r in profile.roles for b in r.bullets]
     for index, ((role, bullet), (term, example)) in enumerate(slots, 1):
         origin = "offline-example"
-        variants = [example.concise, example.concise + " " + example.detail]
+        variants = [example.concise, example.concise + " " + example.detail] if example.concise else []
         model_story = generated.get(index)
         if model_story:
             accepted = [text for text in (model_story.concise, model_story.detailed)
                         if printable(text) and re.search(r"\d", text)
                         and keyword_matches(text, term)
+                        and not _awkward_label_paste(text, term)
                         and _supports_adjacent_priority(text, term, keywords)
                         and all(not _same_accomplishment(text, old) for old in history)]
             if accepted:
                 variants, origin = accepted, "model-example"
         if model_story and origin == "offline-example":
-            plan.notes.append(f"Used a built-in example for {term} because the model response lacked a distinct, usable accomplishment.")
+            plan.notes.append(f"Model output for {term} did not pass the writing checks; using a specialized fallback if available.")
+        if not variants:
+            plan.notes.append(f"No reliable example template for {term}; leaving the original accomplishment available.")
+            continue
         history.extend(variants)
         for ordinal, text in enumerate(dict.fromkeys(variants)):
             key = sha256((role.id + "\0" + bullet.id + "\0" + text).encode()).hexdigest()[:18]
