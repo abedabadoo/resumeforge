@@ -65,7 +65,11 @@ jobs:
           grep -q "Regular launch probe passed" "$HOME/Library/Logs/ResumeForge/startup.log"
           lipo -archs "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge" | grep -qx x86_64
           test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip"
-          test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg"
+          # Verify the downloadable ZIP, even if macOS CI cannot create a DMG.
+          mkdir -p "$RUNNER_TEMP/resumeforge-zip-check"
+          ditto -x -k "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip" "$RUNNER_TEMP/resumeforge-zip-check"
+          test -x "$RUNNER_TEMP/resumeforge-zip-check/ResumeForge.app/Contents/MacOS/ResumeForge"
+          "$RUNNER_TEMP/resumeforge-zip-check/ResumeForge.app/Contents/MacOS/ResumeForge" --package-smoke-test
 
       - name: Test real macOS Cocoa window launch
         run: |
@@ -106,9 +110,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="mac-intel-${GITHUB_SHA:0:8}"
-          gh release create "$tag" \
-            "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip" \
-            "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg" \
+          assets=("$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip")
+          if test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg"; then
+            assets+=("$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg")
+          fi
+          gh release create "$tag" "${assets[@]}" \
             --target "$GITHUB_SHA" \
             --title "ResumeForge for Intel Mac (preview ${GITHUB_SHA:0:8})" \
             --notes-file tools/macos/RELEASE-NOTES.md \
