@@ -156,6 +156,10 @@ class Typesetter:
 
     def fit(self, profile: Profile, plan: Plan, skills: list[str], required_slots=frozenset()) -> Selection:
         from .planning import bullet_relevance
+        # In a tailored application, give relevant evidence page space before
+        # nonessential hobbies. Keep the source profile unchanged.
+        if plan.keywords and profile.interests:
+            profile = profile.model_copy(update={"interests": ""})
         fixed_blocks = self.blocks(profile, [], skills)
         fixed = sum(b.height for b in fixed_blocks)
         # Font descenders can extend beyond a Paragraph's nominal line box.
@@ -221,6 +225,14 @@ class Typesetter:
             # Closest possible fill; the caller must refine rather than changing typography.
             chosen_h = max(states)
         selected = states[chosen_h][1]
+        if plan.keywords:
+            # The optimizer chooses the combination; this orders its winners
+            # by demonstrated relevance within each employer, keeping roles
+            # chronological and the display stable for equal scores.
+            positions = {role.id: i for i, role in enumerate(profile.roles)}
+            selected = sorted(selected, key=lambda c: (
+                positions.get(c.role_id, len(positions)),
+                -bullet_relevance(c.text, plan.keywords)))
         blocks = self.blocks(profile, selected, skills)
         used = sum(b.height for b in blocks)
         warnings = [] if fitting else ["The page needs more grounded content; the font size, margins and spacing remain fixed."]
