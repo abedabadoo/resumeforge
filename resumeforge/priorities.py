@@ -265,7 +265,16 @@ def passages(job):
 
 
 def locations(row, terms):
-    return [match.start() for term in terms for match in [literal_pattern(term).search(row.text)] if match]
+    positions = []
+    for term in terms:
+        for match in literal_pattern(term).finditer(row.text):
+            # "Without the SOC or on-call rotation" describes excluded work,
+            # not a competency the employer wants applicants to demonstrate.
+            prefix = row.text[max(0, match.start() - 45):match.start()]
+            if re.search(r"\b(?:without|no|not requiring|rather than|instead of)\s+(?:(?:a|an|the)\s+)?(?:[\w-]+\s+){0,3}$", prefix, re.I):
+                continue
+            positions.append(match.start())
+    return positions
 
 
 def score(rows, phrases, cues=()):
@@ -316,7 +325,13 @@ _FRAGMENT_EDGE = re.compile(
 def valid_observed_phrase(phrase):
     """Reject clipped prepositional fragments while retaining complete noun phrases."""
     phrase = phrase.strip(" ,.;:()")
-    return bool(phrase and not _FRAGMENT_EDGE.search(phrase))
+    return bool(phrase and not _FRAGMENT_EDGE.search(phrase)
+                and normalize(phrase) not in {
+                    "not", "tools", "analyzing", "clouds", "gcs",
+                    "modern software", "working relationships",
+                    "modern engineering depth", "cross system thinking",
+                    "curiosity", "ownership", "att", "ck", "az",
+                })
 
 
 def _listed_requirements(row):
@@ -354,7 +369,10 @@ def observed_phrases(rows):
             continue
         # Product names like SnowplowDB, OASIS and OpenTelemetry.
         tokens = _listed_requirements(row)
-        tokens.extend(re.findall(r"(?<![\w])(?:[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[A-Z]{2,}[A-Z0-9]{0,9})(?![\w])", row.text))
+        # Long lists of preferred product examples and certifications are not
+        # standalone mandatory skills. Known aliases still capture real tools.
+        if row.section != "preferred" and len(row.text.split()) <= 18:
+            tokens.extend(re.findall(r"(?<![\w])(?:[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[A-Z]{3,}[A-Z0-9]{0,9})(?![\w])", row.text))
         # A short object after a concrete duty or requirement carries more
         # meaning than isolated bag-of-words fragments from the whole advert.
         for match in re.finditer(
@@ -364,6 +382,6 @@ def observed_phrases(rows):
             if valid_observed_phrase(phrase) and len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
                 tokens.append(phrase)
         for text in tokens:
-            if normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents", "applicants", "gdpr", "ccpa", "li-va1", "psi", "salaries", "salary", "pay range", "are multiplied"}:
+            if valid_observed_phrase(text) and normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents", "applicants", "gdpr", "ccpa", "li-va1", "psi", "salaries", "salary", "pay range", "are multiplied"}:
                 seen.setdefault(normalize(text), text)
     return list(seen.values())
