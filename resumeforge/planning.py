@@ -314,25 +314,27 @@ def _targets(profile, job, explicit):
         record(label, phrases, cap.title_cues, "tool" if cap.label in ("Claude Code CLI","MCP","RAG") else "domain")
         found_groups.update(priorities_lib.normalize(t) for t in (cap.label, *phrases))
 
+    language_choices = {"Python", "Ruby", "Java", "JavaScript", "TypeScript", "Go", "Rust"}
+    cloud_choices = {"AWS", "Azure", "Google Cloud"}
+
+    def alternative_example(term):
+        """A provider/language in an OR list is not a separate must-have."""
+        canon = _canonical(term)
+        if canon in explicit or canon not in language_choices | cloud_choices:
+            return False
+        group = (r"\b(?:at least one|one)\s+(?:modern\s+)?programming language\b"
+                 if canon in language_choices else
+                 r"\b(?:at least one|one)\s+major cloud provider\b")
+        mentions = [row for row in rows if keyword_matches(row.text, canon)]
+        return bool(mentions and all(re.search(group, row.text, re.I) for row in mentions))
+
     known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS, *profile.skills]))
     for term in known:
         if (len(term) > 100 or priorities_lib.normalize(term) in found_groups or
+                alternative_example(term) or
                 not any(keyword_matches(row.text, term) for row in rows)):
             continue
         canon = _canonical(term)
-        # Do not turn an OR qualification (one programming language or one
-        # major cloud provider) into several missing mandatory technologies.
-        # Keep a vendor/language as its own requirement when a different
-        # passage explicitly names it as separate work.
-        language_choices = {"Python", "Ruby", "Java", "JavaScript", "TypeScript", "Go", "Rust"}
-        cloud_choices = {"AWS", "Azure", "Google Cloud"}
-        if canon in language_choices | cloud_choices and canon not in explicit:
-            alternate = (r"\b(?:at least one|one)\s+(?:modern\s+)?programming language\b"
-                         if canon in language_choices else
-                         r"\b(?:at least one|one)\s+major cloud provider\b")
-            mentioning = [row for row in rows if keyword_matches(row.text, canon)]
-            if mentioning and all(re.search(alternate, row.text, re.I) for row in mentioning):
-                continue
         # The target "GitHub Copilot" must not manufacture a GitHub requirement.
         spellings = ALIASES.get(canon, (term,))
         relevant_rows = [row for row in rows if keyword_matches(row.text, canon)]
@@ -344,6 +346,8 @@ def _targets(profile, job, explicit):
                                                                    rationale=reason), [canon]))
 
     for term in priorities_lib.observed_phrases(rows):
+        if alternative_example(term):
+            continue
         # Preserve novel concrete duties for occupations outside the glossary.
         # Skip nested terms from a cluster, such as CLI, and syntactic fragments.
         if any(priorities_lib.literal_pattern(term).search(alias) for _, _, mentions in targets.values() for alias in mentions):
