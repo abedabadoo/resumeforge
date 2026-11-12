@@ -4,8 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - fix/job-analysis-and-resume-quality
-      - feature/deloitte-quality-and-mac-updater
+      - main
   workflow_dispatch:
 
 permissions:

@@ -49,13 +49,15 @@ class InspirationTests(unittest.TestCase):
                 self.assertIn(c["text"], text)
             self.assertNotRegex(text.casefold(), r"fictional|placeholder|\[|\]")
 
-    def test_model_story_must_connect_the_tool_to_another_core_capability(self):
+    def test_model_story_must_support_its_target_not_a_second_unrelated_priority(self):
         priorities = [Keyword(term="Claude Code CLI"), Keyword(term="CI/CD"),
                       Keyword(term="SDLC automation")]
-        self.assertFalse(_supports_adjacent_priority(
+        self.assertTrue(_supports_adjacent_priority(
             "Used Claude Code CLI to draft 20 compliance controls.", "Claude Code CLI", priorities))
         self.assertTrue(_supports_adjacent_priority(
             "Used Claude Code CLI in CI/CD to reproduce 20 failing tests.", "Claude Code CLI", priorities))
+        self.assertFalse(_supports_adjacent_priority(
+            "Tracked customer service cases in a spreadsheet.", "Claude Code CLI", priorities))
 
     @patch("resumeforge.inspiration.ask")
     def test_configured_model_receives_reviewed_order_and_draft_is_editable(self, ask):

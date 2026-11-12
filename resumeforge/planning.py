@@ -299,21 +299,10 @@ def _targets(profile, job, explicit):
             continue
         if cap.label == "AI-assisted development" and claude_mentioned:
             continue
-        # Print the posting's label rather than adding a more specific technology.
-        label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation",
-            "WAF administration", "Edge application delivery", "WAF lifecycle and change management",
-            "DDoS and bot mitigation", "WAF monitoring and incident response",
-            "Product security architecture", "Security design reviews",
-            "Threat modeling and attack surface analysis", "Vulnerability management and remediation",
-            "Bug bounty triage", "Web application security", "Application security testing",
-            "Security champions and developer enablement", "Secure SDLC and security tooling",
-            "Product security technical leadership", "Cloud infrastructure security",
-            "Programming languages", "Security on-call",
-            "Cloud security telemetry and alerting infrastructure",
-            "Multi-cloud security engineering", "Unified SIEM and CNAPP threat visibility",
-            "Security data engineering and correlation", "AI-assisted detection engineering",
-            "Cloud security guardrails and detection coverage") else (
-            cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
+        # A capability has one canonical label, regardless of industry.
+        # Selection and importance still come from matched posting passages.
+        # Never maintain a per-job shortlist of labels to elevate.
+        label = cap.label
         phrases = cap.phrases
         if cap.label == "Claude Code CLI":
             phrases += priorities_lib.capability("AI-assisted development").phrases
@@ -334,7 +323,7 @@ def _targets(profile, job, explicit):
         mentions = [row for row in rows if keyword_matches(row.text, canon)]
         return bool(mentions and all(re.search(group, row.text, re.I) for row in mentions))
 
-    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS, *profile.skills]))
+    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS]))
     for term in known:
         if (len(term) > 100 or priorities_lib.normalize(term) in found_groups or
                 alternative_example(term) or
@@ -350,6 +339,21 @@ def _targets(profile, job, explicit):
             kind = "tool" if canon in ALIASES else "strength" if canon in STRENGTHS else "domain" if canon in DOMAINS else "skill"
             targets.setdefault(canon.casefold(), (points, Keyword(term=canon, weight=weight, required=required, kind=kind,
                                                                    rationale=reason), [canon]))
+
+    # Occupation-neutral task extraction runs independently of the catalog.
+    # No hardcoded role or industry must exist for a core duty to be ranked.
+    from .requirement_extraction import extract, word_stems
+    for task in extract(rows):
+        phrase = task.label
+        # Consolidate near-identical mentions without losing a distinct
+        # responsibility solely because a neighboring technology is known.
+        stems = word_stems(phrase)
+        if any(stems and len(stems & word_stems(label.term)) >= 2
+               and len(stems & word_stems(label.term)) >= .85 * min(
+                   len(stems), len(word_stems(label.term)))
+               for _, label, _ in targets.values()):
+            continue
+        record(phrase, [phrase], kind="domain")
 
     for term in priorities_lib.observed_phrases(rows):
         if alternative_example(term):

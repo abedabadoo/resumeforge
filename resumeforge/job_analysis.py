@@ -8,6 +8,7 @@ from .models import Keyword, Model
 from .planning import (_canonical, _evidence_for, analyze_job, credential_requirement,
                        keyword_matches, valid_requirement_term)
 from .priorities import capability, literal_pattern, normalize, passages, score
+from .requirement_extraction import grounded_label
 
 
 class Requirement(Model):
@@ -48,7 +49,7 @@ def analyze_posting(profile, job, keywords, settings):
     excerpt = cleaned[:12000]
     try:
         reading = ask(settings, Reading, _SYSTEM,
-                      {"posting": excerpt, "existing_capabilities": [row["term"] for row in rows[:28]]}, 850)
+                      {"posting": excerpt}, 850)
     except (RuntimeError, OSError):
         return rows
 
@@ -78,22 +79,30 @@ def analyze_posting(profile, job, keywords, settings):
             row = {**_evidence_for(target, records, profile.skills, education),
                    "terms": row.get("terms", [target.term])}
             by_label[_capability_key(row["term"])] = row
+        source_passage = next((source for source in passages(job)
+                               if quote.casefold().rstrip(" .") in source.text.casefold()), None)
+        if source_passage is None:
+            continue
+        # A new, unrecognized capability may be a useful paraphrase of a
+        # specific task. Validate it against the quoted source instead of
+        # requiring every word to appear verbatim in the job posting.
+        lexical = row and any(keyword_matches(quote, term)
+                              for term in [row["term"], *row["terms"]])
+        semantic = grounded_label(finding.capability, quote)
+        if not lexical and not semantic:
+            continue
         if row is None:
             if not valid_requirement_term(finding.capability):
                 continue
-            if not literal_pattern(finding.capability).search(quote):
+            rank = score([source_passage], [source_passage.text])
+            if not rank:
                 continue
-            ranking = score(passages(job), [finding.capability])
-            if not ranking:
-                continue
-            _, weight, required, rationale = ranking
+            _, weight, required, rationale = rank
             kind = "credential" if (finding.kind == "credential" or credential_requirement(finding.capability)) \
                    else "strength" if finding.kind == "strength" else "skill"
             target = Keyword(term=finding.capability, weight=weight, required=required,
                              rationale=rationale, kind=kind)
             row = {**_evidence_for(target, records, profile.skills, education), "terms": [target.term]}
-        if not any(keyword_matches(quote, term) for term in [row["term"], *row["terms"]]):
-            continue
         key = _capability_key(row["term"])
         by_label.setdefault(key, row)
         if key not in by_model:
@@ -113,14 +122,18 @@ def analyze_posting(profile, job, keywords, settings):
             return -1, -(by_model.get(key, position) + position / 100)
         if key in explicit or row["rationale"] == "User requested priority.":
             return 2, -position
-        base = 1 / (3 + position)
-        support = .9 / (3 + by_model[key]) if key in by_model else 0
-        if row["weight"] <= 3:
-            support *= .25
-        # Apply the model's ranking within each requirement tier. A new
-        # quoted requirement can enter the core tier on the same evidence as
-        # a known term. Optional suggestions cannot displace mandatory work.
-        core = row["required"] or row["weight"] == 5
-        return int(core), base + support
+        # Ranked, source-quoted model results take precedence within their
+        # importance tier. Unselected catalog matches cannot outrank an
+        # explicitly ranked requirement merely because the catalog contains
+        # more synonyms or repeated product names.
+        optional = row.get("rationale", "").startswith(("Preferred qualification", "One of several example"))
+        # The model reads the entire posting without catalogue suggestions.
+        # A core responsibility it ranks highly must beat an unselected
+        # mandatory keyword merely because that keyword has many aliases.
+        if key in by_model:
+            # Explicit mandatory work selected by the reader outranks duties;
+            # selected duties still outrank unselected catalog matches.
+            return (1 if optional else 4 if row["required"] else 3), 1, -by_model[key]
+        return (1 if optional else 2 if row["required"] or row["weight"] >= 4 else 1), 0, -position
 
     return sorted(by_label.values(), key=priority, reverse=True)
