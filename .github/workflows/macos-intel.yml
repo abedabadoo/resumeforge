@@ -61,6 +61,28 @@ jobs:
           test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip"
           test -s "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.dmg"
 
+      - name: Test real macOS Cocoa window launch
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          app = Path(os.environ["RUNNER_TEMP"]) / "resumeforge-mac-dist/ResumeForge.app/Contents/MacOS/ResumeForge"
+          environment = os.environ.copy()
+          environment.pop("QT_QPA_PLATFORM", None)
+          result = subprocess.run(
+              [str(app), "--full-launch-smoke-test", "-psn_0_12345"],
+              env=environment, text=True, capture_output=True, timeout=35)
+          print(result.stdout)
+          print(result.stderr)
+          if result.returncode:
+              log = Path.home() / "Library/Logs/ResumeForge/startup.log"
+              if log.is_file():
+                  print(log.read_text(encoding="utf-8")[-5000:])
+              raise SystemExit(f"Native Cocoa startup failed: {result.returncode}")
+          PY
+
       - name: Upload ZIP and DMG
         uses: actions/upload-artifact@v4
         with:
