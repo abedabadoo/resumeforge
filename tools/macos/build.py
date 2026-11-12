@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import platform
@@ -45,6 +46,12 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
     sample = work / "resources" / "resumeforge" / "data" / "abu.profile.json"
     sample.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(DEMO_PROFILE, sample)
+    revision = os.environ.get("GITHUB_SHA", "development")
+    build_tag = os.environ.get("RESUMEFORGE_MAC_RELEASE_TAG") or (
+        "mac-intel-" + revision[:8] if revision != "development" else "development")
+    metadata = work / "resources" / "build_info.json"
+    metadata.write_text(json.dumps({"tag": build_tag, "revision": revision,
+                                    "platform": "macos-intel"}) + "\n", encoding="utf-8")
 
     command = [
         sys.executable, "-m", "PyInstaller",
@@ -58,6 +65,8 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
         # Collect only distributable assets: never bundle the developer's
         # resumeforge/data/abu.profile.json or other personal profiles.
         "--add-data", f"{sample}:resumeforge/data",
+        "--add-data", f"{metadata}:resumeforge",
+        "--add-data", f"{ROOT / 'resumeforge/mac_update_helper.sh'}:resumeforge",
         "--add-data", f"{ROOT / 'resumeforge/data/risk-guard.json'}:resumeforge/data",
         "--add-data", f"{ROOT / 'resumeforge/fonts'}:resumeforge/fonts",
         "--add-data", f"{ROOT / 'resumeforge/static'}:resumeforge/static",
@@ -126,6 +135,11 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
         raise RuntimeError("PDF fonts are missing from the application")
     if not list(app.rglob("libpdfium.dylib")):
         raise RuntimeError("PDFium's macOS native library is missing")
+    if not list(app.rglob("mac_update_helper.sh")):
+        raise RuntimeError("The Mac auto-update helper was not packaged")
+    info = list(app.rglob("build_info.json"))
+    if len(info) != 1 or json.loads(info[0].read_text())["tag"] != build_tag:
+        raise RuntimeError("Mac build identity is missing or incorrect")
 
     zip_path = out / "ResumeForge-macOS-Intel.zip"
     dmg_path = out / "ResumeForge-macOS-Intel.dmg"
