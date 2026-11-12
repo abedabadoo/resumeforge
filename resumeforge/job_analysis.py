@@ -127,9 +127,11 @@ def analyze_posting(profile, job, keywords, settings):
         # explicitly ranked requirement merely because the catalog contains
         # more synonyms or repeated product names.
         optional = row.get("rationale", "").startswith(("Preferred qualification", "One of several example"))
-        tier = 1 if optional else 3 if row["required"] else 2 if row["weight"] >= 4 else 1
+        # The model reads the entire posting without catalogue suggestions.
+        # A core responsibility it ranks highly must beat an unselected
+        # mandatory keyword merely because that keyword has many aliases.
         if key in by_model:
-            return tier, 1, -by_model[key]
-        return tier, 0, -position
+            return (1 if optional else 3), 1, -by_model[key]
+        return (1 if optional else 2 if row["required"] or row["weight"] >= 4 else 1), 0, -position
 
     return sorted(by_label.values(), key=priority, reverse=True)
