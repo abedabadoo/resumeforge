@@ -18,6 +18,50 @@ class Capability:
 # Alternate expressions in a posting form one priority. Neighbors help identify
 # transferable experience but do not establish an exact match to that priority.
 CAPABILITIES = (
+    # Cloud defense engineering: platforms, telemetry, and unified visibility.
+    Capability("Cloud security telemetry and alerting infrastructure", (
+        "cloud security telemetry", "security telemetry", "telemetry, logging, and alerting",
+        "telemetry, monitoring, and alerting infrastructure", "cloud security logging",
+        "logging and alerting", "alerting infrastructure", "log ingestion",
+        "log storage", "log retention", "log retrieval",
+        "cloud detection and response platform", "cloud security monitoring infrastructure"),
+        ("alert ingestion", "SLO alerts", "Datadog", "logging", "log analysis",
+         "monitoring", "runbooks", "SIEM", "cloud logging")),
+    Capability("Multi-cloud security engineering", (
+        "multi-cloud experience", "multi-cloud environment", "multi-cloud environments",
+        "multiple cloud environments", "multi-cloud security", "multi-cloud",
+        "cloud and security engineering", "cloud engineering", "cloud defensive operations",
+        "directly managing cloud security infrastructure"),
+        ("AWS", "Amazon Web Services", "Azure", "Microsoft Azure", "GCP",
+         "Google Cloud Platform", "Infrastructure as Code", "Terraform", "Docker")),
+    Capability("Unified SIEM and CNAPP threat visibility", (
+        "unified threat visibility", "unified view", "unified data platforms",
+        "cloud-native application protection", "cloud native application protection",
+        "CNAPP", "SIEM platforms", "detection & SIEM", "detection and SIEM",
+        "log-analytics platforms", "security log analytics", "cloud-native alerts"),
+        ("SIEM", "Splunk", "Datadog", "incident response", "alert ingestion",
+         "Microsoft Azure", "AWS", "Google Cloud Platform")),
+    Capability("Security data engineering and correlation", (
+        "correlating data across systems", "data modeling", "data correlation",
+        "correlating security data", "AI-driven correlation", "security data",
+        "data modeling or correlating", "correlation across data sources",
+        "log ingestion, storage, retention, and retrieval"),
+        ("SQL", "Python", "Datadog", "log ingestion", "alert ingestion", "SIEM",
+         "automated reporting", "data pipelines")),
+    Capability("AI-assisted detection engineering", (
+        "AI-infused security engineering", "AI-driven correlation",
+        "AI-assisted engineering", "AI-driven security", "applied AI",
+        "AI tools for building", "AI for detection", "AI into how we build",
+        "AI can change how we build"),
+        ("LLM-powered", "AI-assisted development", "AI code-review",
+         "AI assistant", "Python", "automation")),
+    Capability("Cloud security guardrails and detection coverage", (
+        "configuration guardrails", "guardrails and improvements",
+        "cloud security guardrails", "gaps in visibility", "gaps in coverage",
+        "visibility or coverage", "close gaps in visibility", "security guardrails",
+        "cloud-native guardrails"),
+        ("Infrastructure as Code", "AWS", "Azure", "Google Cloud Platform",
+         "Terraform", "security controls", "Datadog")),
 
     # Product security is its own discipline, not a synonym for perimeter WAF
     # operations. Each family captures job responsibilities and transferable
