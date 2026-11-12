@@ -66,6 +66,26 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
     binary = app / "Contents" / "MacOS" / "ResumeForge"
     if not binary.is_file():
         raise FileNotFoundError(f"Missing packaged executable: {binary}")
+
+    # PyInstaller can resolve an older libssl from setup-python's framework,
+    # while cryptography's _rust wheel requires newer OpenSSL 3 symbols.
+    # Bundle a matched, up-to-date OpenSSL pair from the Intel Homebrew formula
+    # instead of relying on whatever is present on the target Mac.
+    openssl = Path(execute("brew", "--prefix", "openssl@3")) / "lib"
+    frameworks = app / "Contents" / "Frameworks"
+    for name in ("libcrypto.3.dylib", "libssl.3.dylib"):
+        source, dest = openssl / name, frameworks / name
+        if not source.is_file() or not dest.is_file():
+            raise FileNotFoundError(f"OpenSSL bundling prerequisite missing: {source} or {dest}")
+        shutil.copy2(source, dest)
+        execute("install_name_tool", "-id", f"@rpath/{name}", dest)
+    ssl_symbols = execute("nm", "-gU", frameworks / "libssl.3.dylib")
+    if "_SSL_get0_group_name" not in ssl_symbols:
+        raise RuntimeError("Bundled OpenSSL is too old for the installed cryptography wheel")
+    # Re-sign the modified frameworks and outer app with an ad-hoc signature.
+    # This is NOT Apple Developer ID signing or notarization.
+    execute("codesign", "--force", "--deep", "--sign", "-", app)
+    execute("codesign", "--verify", "--deep", "--strict", app)
     architectures = execute("lipo", "-archs", binary).split()
     if architectures != ["x86_64"]:
         raise RuntimeError(f"Expected Intel-only executable, found {architectures}")
