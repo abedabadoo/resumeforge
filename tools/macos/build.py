@@ -25,6 +25,13 @@ def execute(*args):
     return subprocess.run([str(value) for value in args], check=True, text=True, capture_output=True).stdout.strip()
 
 
+def dylib_dependencies(path: Path) -> list[str]:
+    """Return install-name paths from the macOS loader table (not the library ID)."""
+    output = execute("otool", "-L", path)
+    return [line.strip().split(" (", 1)[0]
+            for line in output.splitlines()[1:] if line.strip()]
+
+
 def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
     if sys.platform != "darwin" or platform.machine() != "x86_64":
         raise RuntimeError("Build the Intel Mac package on a native x86_64 macOS runner.")
@@ -79,6 +86,25 @@ def build(out: Path, work: Path) -> tuple[Path, Path, Path]:
             raise FileNotFoundError(f"OpenSSL bundling prerequisite missing: {source} or {dest}")
         shutil.copy2(source, dest)
         execute("install_name_tool", "-id", f"@rpath/{name}", dest)
+
+    # Updating a library's own install name (-id) does NOT rewrite references
+    # it makes to other libraries. Homebrew libssl usually links to an absolute
+    # Cellar path for libcrypto, which does not exist on users' Macs. Relocate
+    # that dependency into the same directory as the bundled libssl.
+    ssl_path = frameworks / "libssl.3.dylib"
+    for dependency in dylib_dependencies(ssl_path):
+        if dependency.endswith("/libcrypto.3.dylib") and dependency != "@loader_path/libcrypto.3.dylib":
+            execute("install_name_tool", "-change", dependency,
+                    "@loader_path/libcrypto.3.dylib", ssl_path)
+    if "@loader_path/libcrypto.3.dylib" not in dylib_dependencies(ssl_path):
+        raise RuntimeError("Bundled libssl does not load its bundled libcrypto")
+    for name in ("libssl.3.dylib", "libcrypto.3.dylib"):
+        path = frameworks / name
+        unsafe = [dep for dep in dylib_dependencies(path)
+                  if dep.startswith(("/usr/local/", "/opt/homebrew/", "/Users/"))]
+        if unsafe:
+            raise RuntimeError(f"Nonportable OpenSSL dependency in {name}: {unsafe}")
+
     ssl_symbols = execute("nm", "-gU", frameworks / "libssl.3.dylib")
     if "_SSL_get0_group_name" not in ssl_symbols:
         raise RuntimeError("Bundled OpenSSL is too old for the installed cryptography wheel")
