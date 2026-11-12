@@ -239,8 +239,10 @@ def rank_skills(profile: Profile, keywords: list[Keyword] | list[str]) -> list[s
         return clean
     scored.sort(key=lambda item: (-item[0], item[1]))
     relevant = [skill for score, _, skill in scored if score]
-    # Preserve a small useful core if only one or two categories match.
-    return [skill for _, _, skill in scored[:max(len(relevant), min(3, len(clean)))]]
+    # Keep a compact high-signal technical core without allowing a specialized
+    # posting to delete nearly every tool the applicant already demonstrates.
+    limit = min(len(clean), max(8, min(14, len(relevant) + 2)))
+    return [skill for _, _, skill in scored[:limit]]
 
 
 _TECHNICAL_SKILLS = {_normalized(t) for t in DOMAINS} | {
@@ -298,7 +300,13 @@ def _targets(profile, job, explicit):
         # Print the posting's label rather than adding a more specific technology.
         label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation",
             "WAF administration", "Edge application delivery", "WAF lifecycle and change management",
-            "DDoS and bot mitigation", "WAF monitoring and incident response") else (
+            "DDoS and bot mitigation", "WAF monitoring and incident response",
+            "Product security architecture", "Security design reviews",
+            "Threat modeling and attack surface analysis", "Vulnerability management and remediation",
+            "Bug bounty triage", "Web application security", "Application security testing",
+            "Security champions and developer enablement", "Secure SDLC and security tooling",
+            "Product security technical leadership", "Cloud infrastructure security",
+            "Programming languages", "Security on-call") else (
             cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
         phrases = cap.phrases
         if cap.label == "Claude Code CLI":
@@ -412,8 +420,24 @@ def keyword_coverage(keywords, bullets, skills):
 
 def bullet_relevance(text, keywords):
     """Credit actual capability matches and discount transferable evidence."""
-    return sum(kw.weight * (1 if keyword_matches(text, kw.term) else .36 if priorities_lib.related(text, kw.term) else 0)
-               for kw in keywords if kw.kind != "credential")
+    # Reward the highest-ranked distinct requirements rather than every
+    # spelling of a cluster. Later optional examples contribute less.
+    total = 0.0
+    seen = set()
+    for position, kw in enumerate(keywords):
+        if kw.kind == "credential":
+            continue
+        cap = priorities_lib.capability(kw.term)
+        group = priorities_lib.normalize(cap.label if cap else kw.term)
+        if group in seen:
+            continue
+        seen.add(group)
+        focus = 1 / (1 + position / 12)
+        if keyword_matches(text, kw.term):
+            total += kw.weight * focus
+        elif priorities_lib.related(text, kw.term):
+            total += kw.weight * .32 * focus
+    return total
 
 
 def selected_skills(profile, plan, settings, edit_request=""):
