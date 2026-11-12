@@ -241,7 +241,9 @@ def rank_skills(profile: Profile, keywords: list[Keyword] | list[str]) -> list[s
     relevant = [skill for score, _, skill in scored if score]
     # Keep a compact high-signal technical core without allowing a specialized
     # posting to delete nearly every tool the applicant already demonstrates.
-    limit = min(len(clean), max(8, min(14, len(relevant) + 2)))
+    # Keep actual technical tools such as Python, Datadog and CI/CD even
+    # when the posting focuses on a high-level cloud defense capability.
+    limit = min(len(clean), max(12, min(18, len(relevant) + 4)))
     return [skill for _, _, skill in scored[:limit]]
 
 
@@ -306,7 +308,11 @@ def _targets(profile, job, explicit):
             "Bug bounty triage", "Web application security", "Application security testing",
             "Security champions and developer enablement", "Secure SDLC and security tooling",
             "Product security technical leadership", "Cloud infrastructure security",
-            "Programming languages", "Security on-call") else (
+            "Programming languages", "Security on-call",
+            "Cloud security telemetry and alerting infrastructure",
+            "Multi-cloud security engineering", "Unified SIEM and CNAPP threat visibility",
+            "Security data engineering and correlation", "AI-assisted detection engineering",
+            "Cloud security guardrails and detection coverage") else (
             cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
         phrases = cap.phrases
         if cap.label == "Claude Code CLI":
