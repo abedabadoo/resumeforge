@@ -40,6 +40,12 @@ jobs:
       - name: Run Python unit tests
         run: python -m unittest discover -s tests -v
 
+      - name: Ensure a matched OpenSSL 3 runtime for the Mac bundle
+        run: |
+          if ! brew list --versions openssl@3 | grep -q .; then
+            brew install openssl@3
+          fi
+
       - name: Build Mac app, ZIP and DMG
         run: |
           python tools/macos/build.py --work "$RUNNER_TEMP/resumeforge-mac-work" --out "$RUNNER_TEMP/resumeforge-mac-dist"
