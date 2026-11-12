@@ -155,9 +155,9 @@ CAPABILITIES = (
         ("OWASP ZAP", "Vulnerability Analysis", "Datadog", "Splunk", "SIEM", "TCP/IP", "AWS",
          "Microsoft Azure", "Linux", "Unix")),
     Capability("WAF monitoring and incident response", ("WAF monitoring and incident response",
-        "WAF monitoring", "WAF incident response", "WAF incidents", "traffic analysis",
-        "malicious traffic analysis", "attack investigation", "IP blocklisting", "IP blocklist",
-        "blocklisting", "blocklist", "SIEM", "Security Operations Center", "SOC operations"),
+        "WAF monitoring", "WAF incident response", "WAF incidents", "WAF traffic analysis",
+        "WAF traffic investigation", "WAF IP blocklisting", "WAF blocklist",
+        "WAF telemetry", "WAF events", "WAF logs"),
         ("incident response", "logs", "runbooks", "on-call", "SLO alerts", "Datadog", "Splunk",
          "OWASP ZAP", "TCP/IP", "Linux", "Unix")),
     Capability("Agentic engineering harnesses", ("agentic engineering harnesses", "agentic engineering harness",
@@ -178,7 +178,7 @@ CAPABILITIES = (
     Capability("SDLC automation", ("SDLC automation", "automate software development lifecycle",
         "software development lifecycle automation", "software development lifecycle processes", "automate the software development lifecycle",
         "automated software delivery", "AI-driven SDLC"), ("CI/CD", "GitHub Actions", "AI code-review", "deployment automation")),
-    Capability("Programming and scripting", ("programming, scripting", "scripting", "programming skills",
+    Capability("Programming and scripting", ("programming, scripting", "programming and infrastructure as code", "programming experience", "scripting", "programming skills",
         "scripting skills"), ("Python", "Bash", "PowerShell", "Linux", "Unix", "Go language", "JavaScript")),
     Capability("Platform integrations", ("integrating development platforms", "integrate engineering platforms",
         "platform integrations", "engineering integrations", "API integrations"),
@@ -227,9 +227,9 @@ class Passage:
 
 
 _HEADINGS = {
-    "preferred": r"(?:preferred|desirable|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
+    "preferred": r"(?:preferred|desirable|desired(?:\s+skills?\s*/\s*certifications?)?|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
     "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|you should have|must[- ]have(?: technical/functional skills)?|qualifications",
-    "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|the role|your impact",
+    "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|where you(?:'|’)ll make an impact|the role|your impact",
     "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company|flexport)|how to apply|how we work|why this role is special|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
 }
 _EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
