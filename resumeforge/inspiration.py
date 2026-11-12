@@ -32,6 +32,24 @@ class Example:
 # Pairs describe the same accomplishment at two measured lengths. The editor
 # can swap the amount of detail without inventing another number to fill a line.
 _LIBRARY = [
+    Example(r"cloud security telemetry|telemetry.*alerting|log ingestion|cloud detection and response platform",
+            "Built a cross-cloud security telemetry pipeline that centralized event ingestion, log retention, and alert routing for 20 production services.",
+            "Added health checks on ingestion latency and documented searchable investigation fields for the Cyber Defense team."),
+    Example(r"multi.cloud security engineering|multi.cloud environment|directly managing cloud security",
+            "Automated AWS, Azure, and GCP security monitoring setup through reusable configuration modules, cutting onboarding effort by 40% across nine workloads.",
+            "Standardized alert labels and integration checks so platform engineers could troubleshoot each cloud consistently."),
+    Example(r"unified SIEM and CNAPP|unified threat visibility|cloud.native application protection|CNAPP",
+            "Integrated SIEM and CNAPP events into a unified cloud investigation view, reducing duplicate alert triage by 35% for analysts.",
+            "Mapped workload and finding identifiers between systems to support consistent severity prioritization."),
+    Example(r"security data engineering and correlation|data modeling|correlating security data",
+            "Built a security-event correlation model across four data sources, linking cloud identities to affected workloads and reducing manual investigation joins by 50%.",
+            "Validated field mappings with incident responders and added exception handling for incomplete event records."),
+    Example(r"AI.assisted detection engineering|AI.infused security engineering|AI.driven correlation",
+            "Built an AI-assisted detection workflow that grouped related security alerts and cut average analyst review time by 35%.",
+            "Included source evidence and human review gates so analysts could verify every suggested incident grouping."),
+    Example(r"cloud security guardrails and detection coverage|configuration guardrails|gaps in visibility",
+            "Used Terraform and Python to codify cloud security guardrails across 500 resources and close recurring configuration drift findings.",
+            "Validated policy coverage through scheduled scans and documented exception handling for infrastructure owners."),
     Example(r"product security architecture|security architecture|secure.by.default|reference implementations",
             "Defined secure-by-default architecture patterns for six product services, standardizing authentication and service boundary controls ahead of engineering release.",
             "Reviewed high-risk exceptions with application owners and documented reusable security reference implementations."),
@@ -154,7 +172,7 @@ def _same_accomplishment(text, previous):
 def printable(text):
     """Validate new prose for printing. Origin and prompts remain in the editor."""
     return (8 <= len(text.split()) <= 100 and len(text) <= 800 and
-            not re.search(r"[\[\]{}<>\n\r]|\*\*|\?\s*$|^(?:[-*•]|\d+[.)])\s|\b(?:placeholder|TODO|insert here|fictional|hypothetical|sample bullet|made.up)\b", text, re.I))
+            not re.search(r"[\[\]{}<>\n\r]|\*\*|\?\s*$|^(?:[-*•]|\d+[.)])\s|\(cid:\d+\)|\b(?:placeholder|TODO|insert here|fictional|hypothetical|sample bullet|made.up)\b", text, re.I))
 
 
 def _actionable(keywords):
