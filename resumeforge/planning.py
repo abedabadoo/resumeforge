@@ -351,6 +351,21 @@ def _targets(profile, job, explicit):
             targets.setdefault(canon.casefold(), (points, Keyword(term=canon, weight=weight, required=required, kind=kind,
                                                                    rationale=reason), [canon]))
 
+    # Occupation-neutral task extraction runs independently of the catalog.
+    # No hardcoded role or industry must exist for a core duty to be ranked.
+    from .requirement_extraction import extract, word_stems
+    for task in extract(rows):
+        phrase = task.label
+        # Consolidate near-identical mentions without losing a distinct
+        # responsibility solely because a neighboring technology is known.
+        stems = word_stems(phrase)
+        if any(stems and len(stems & word_stems(label.term)) >= 2
+               and len(stems & word_stems(label.term)) >= .85 * min(
+                   len(stems), len(word_stems(label.term)))
+               for _, label, _ in targets.values()):
+            continue
+        record(phrase, [phrase], kind="domain")
+
     for term in priorities_lib.observed_phrases(rows):
         if alternative_example(term):
             continue
