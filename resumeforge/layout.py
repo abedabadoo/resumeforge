@@ -154,8 +154,13 @@ class Typesetter:
                 blocks += [self.pair(education.institution, education.dates, bold=True), self.pair(education.degree, education.detail, italic=True)]
         return blocks
 
-    def fit(self, profile: Profile, plan: Plan, skills: list[str], required_slots=frozenset()) -> Selection:
+    def fit(self, profile: Profile, plan: Plan, skills: list[str], required_slots=frozenset(), *, drop_interests=True) -> Selection:
         from .planning import bullet_relevance
+        # In a tailored application, give relevant evidence page space before
+        # nonessential hobbies. Keep the source profile unchanged.
+        original_profile = profile
+        if drop_interests and plan.keywords and profile.interests:
+            profile = profile.model_copy(update={"interests": ""})
         fixed_blocks = self.blocks(profile, [], skills)
         fixed = sum(b.height for b in fixed_blocks)
         # Font descenders can extend beyond a Paragraph's nominal line box.
@@ -214,6 +219,10 @@ class Typesetter:
                                  ["No one-page combination retains the minimum bullets per role. Shorter grounded alternatives are needed."])
         target = math.floor((self.t.bottom_tolerance-abs(ink_offset)) * 100)
         fitting = {h:v for h,v in states.items() if capacity-h <= target}
+        # Don't turn a previously valid single-page export into underfill just
+        # because removing optional hobbies left too much blank space.
+        if not fitting and drop_interests and plan.keywords and original_profile.interests:
+            return self.fit(original_profile, plan, skills, required_slots, drop_interests=False)
         if fitting:
             # All are full enough. Choose relevance/quality, then the smallest gap.
             chosen_h = max(fitting, key=lambda h: (fitting[h][0], h))
@@ -221,6 +230,14 @@ class Typesetter:
             # Closest possible fill; the caller must refine rather than changing typography.
             chosen_h = max(states)
         selected = states[chosen_h][1]
+        if plan.keywords:
+            # The optimizer chooses the combination; this orders its winners
+            # by demonstrated relevance within each employer, keeping roles
+            # chronological and the display stable for equal scores.
+            positions = {role.id: i for i, role in enumerate(profile.roles)}
+            selected = sorted(selected, key=lambda c: (
+                positions.get(c.role_id, len(positions)),
+                -bullet_relevance(c.text, plan.keywords)))
         blocks = self.blocks(profile, selected, skills)
         used = sum(b.height for b in blocks)
         warnings = [] if fitting else ["The page needs more grounded content; the font size, margins and spacing remain fixed."]
@@ -258,6 +275,8 @@ class Typesetter:
             pages = len(pdf.pages)
             chars = [ch for p in pdf.pages for ch in p.chars if ch.get("text", "").strip()]
             extracted = "\n".join(p.extract_text() or "" for p in pdf.pages)
+            if re.search(r"\(cid:\d+\)", extracted, re.I) or re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", extracted):
+                issues.append("PDF text contains an unmapped glyph or control character")
             for ch in chars:
                 if ch['x0'] < self.t.margin_left-.8 or ch['x1'] > self.t.page_width-self.t.margin_right+.8:
                     issues.append("Text crosses a side margin")

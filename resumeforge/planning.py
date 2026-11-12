@@ -239,8 +239,12 @@ def rank_skills(profile: Profile, keywords: list[Keyword] | list[str]) -> list[s
         return clean
     scored.sort(key=lambda item: (-item[0], item[1]))
     relevant = [skill for score, _, skill in scored if score]
-    # Preserve a small useful core if only one or two categories match.
-    return [skill for _, _, skill in scored[:max(len(relevant), min(3, len(clean)))]]
+    # Keep a compact high-signal technical core without allowing a specialized
+    # posting to delete nearly every tool the applicant already demonstrates.
+    # Keep actual technical tools such as Python, Datadog and CI/CD even
+    # when the posting focuses on a high-level cloud defense capability.
+    limit = min(len(clean), max(12, min(18, len(relevant) + 4)))
+    return [skill for _, _, skill in scored[:limit]]
 
 
 _TECHNICAL_SKILLS = {_normalized(t) for t in DOMAINS} | {
@@ -295,20 +299,34 @@ def _targets(profile, job, explicit):
             continue
         if cap.label == "AI-assisted development" and claude_mentioned:
             continue
-        # Print the posting's label rather than adding a more specific technology.
-        label = cap.label if cap.label in ("Programming and scripting", "Platform integrations", "SDLC automation",
-            "WAF administration", "Edge application delivery", "WAF lifecycle and change management",
-            "DDoS and bot mitigation", "WAF monitoring and incident response") else (
-            cap.label if any(priorities_lib.normalize(cap.label) == priorities_lib.normalize(t) for t in present) else present[0])
+        # A capability has one canonical label, regardless of industry.
+        # Selection and importance still come from matched posting passages.
+        # Never maintain a per-job shortlist of labels to elevate.
+        label = cap.label
         phrases = cap.phrases
         if cap.label == "Claude Code CLI":
             phrases += priorities_lib.capability("AI-assisted development").phrases
         record(label, phrases, cap.title_cues, "tool" if cap.label in ("Claude Code CLI","MCP","RAG") else "domain")
         found_groups.update(priorities_lib.normalize(t) for t in (cap.label, *phrases))
 
-    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS, *profile.skills]))
+    language_choices = {"Python", "Ruby", "Java", "JavaScript", "TypeScript", "Go", "Rust"}
+    cloud_choices = {"AWS", "Azure", "Google Cloud"}
+
+    def alternative_example(term):
+        """A provider/language in an OR list is not a separate must-have."""
+        canon = _canonical(term)
+        if canon in explicit or canon not in language_choices | cloud_choices:
+            return False
+        group = (r"\b(?:at least one|one)\s+(?:modern\s+)?programming language\b"
+                 if canon in language_choices else
+                 r"\b(?:at least one|one)\s+major cloud provider\b")
+        mentions = [row for row in rows if keyword_matches(row.text, canon)]
+        return bool(mentions and all(re.search(group, row.text, re.I) for row in mentions))
+
+    known = list(dict.fromkeys([*ALIASES, *DOMAINS, *STRENGTHS]))
     for term in known:
         if (len(term) > 100 or priorities_lib.normalize(term) in found_groups or
+                alternative_example(term) or
                 not any(keyword_matches(row.text, term) for row in rows)):
             continue
         canon = _canonical(term)
@@ -322,7 +340,24 @@ def _targets(profile, job, explicit):
             targets.setdefault(canon.casefold(), (points, Keyword(term=canon, weight=weight, required=required, kind=kind,
                                                                    rationale=reason), [canon]))
 
+    # Occupation-neutral task extraction runs independently of the catalog.
+    # No hardcoded role or industry must exist for a core duty to be ranked.
+    from .requirement_extraction import extract, word_stems
+    for task in extract(rows):
+        phrase = task.label
+        # Consolidate near-identical mentions without losing a distinct
+        # responsibility solely because a neighboring technology is known.
+        stems = word_stems(phrase)
+        if any(stems and len(stems & word_stems(label.term)) >= 2
+               and len(stems & word_stems(label.term)) >= .85 * min(
+                   len(stems), len(word_stems(label.term)))
+               for _, label, _ in targets.values()):
+            continue
+        record(phrase, [phrase], kind="domain")
+
     for term in priorities_lib.observed_phrases(rows):
+        if alternative_example(term):
+            continue
         # Preserve novel concrete duties for occupations outside the glossary.
         # Skip nested terms from a cluster, such as CLI, and syntactic fragments.
         if any(priorities_lib.literal_pattern(term).search(alias) for _, _, mentions in targets.values() for alias in mentions):
@@ -412,8 +447,24 @@ def keyword_coverage(keywords, bullets, skills):
 
 def bullet_relevance(text, keywords):
     """Credit actual capability matches and discount transferable evidence."""
-    return sum(kw.weight * (1 if keyword_matches(text, kw.term) else .36 if priorities_lib.related(text, kw.term) else 0)
-               for kw in keywords if kw.kind != "credential")
+    # Reward the highest-ranked distinct requirements rather than every
+    # spelling of a cluster. Later optional examples contribute less.
+    total = 0.0
+    seen = set()
+    for position, kw in enumerate(keywords):
+        if kw.kind == "credential":
+            continue
+        cap = priorities_lib.capability(kw.term)
+        group = priorities_lib.normalize(cap.label if cap else kw.term)
+        if group in seen:
+            continue
+        seen.add(group)
+        focus = 1 / (1 + position / 12)
+        if keyword_matches(text, kw.term):
+            total += kw.weight * focus
+        elif priorities_lib.related(text, kw.term):
+            total += kw.weight * .32 * focus
+    return total
 
 
 def selected_skills(profile, plan, settings, edit_request=""):

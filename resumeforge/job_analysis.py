@@ -8,6 +8,7 @@ from .models import Keyword, Model
 from .planning import (_canonical, _evidence_for, analyze_job, credential_requirement,
                        keyword_matches, valid_requirement_term)
 from .priorities import capability, literal_pattern, normalize, passages, score
+from .requirement_extraction import grounded_label
 
 
 class Requirement(Model):
@@ -20,15 +21,16 @@ class Reading(Model):
     requirements: list[Requirement] = Field(max_length=8)
 
 
-_SYSTEM = """Read the posting as a hiring manager. Rank up to seven distinct capabilities by
-how central they are to doing this job. Prioritize the title's specialty, required hands-on work,
-and recurring responsibilities. Group alternative tools that demonstrate the same capability.
-Treat preferred qualifications and long lists of interchangeable products as secondary. You may
-choose an existing capability label or extract a specific phrase the initial list overlooked.
-Classify degrees, licenses and certifications as credentials; they are eligibility checks, not
-skills or accomplishment-writing targets. Reject clipped fragments such as "with application."
-For each capability quote a short exact passage from the posting which explicitly names it.
-The candidate's existing skills must not determine which requirements are important."""
+_SYSTEM = """Analyze ONLY the supplied hiring requirements. Rank up to seven distinct
+job capabilities, prioritizing the specialty, hands-on responsibilities, and required
+skills. Group alternative tools and languages into one OR requirement, not several
+mandatory missing skills. Keep preferred qualifications lower than core duties.
+Classify degrees, licenses and certifications separately from performable capabilities.
+Ignore compensation, benefits, privacy disclosures, tracking codes, and recruiting
+boilerplate. Never reuse requirements from a previous job or infer them from the
+candidate resume. Reject fragments such as 'with application' and 'are multiplied'.
+For every requirement supply an exact supporting quotation from the given posting.
+Quote actual requirements; do not invent or paraphrase the quoted text."""
 
 
 def _capability_key(term):
@@ -41,12 +43,13 @@ def analyze_posting(profile, job, keywords, settings):
     rows = analyze_job(profile, job, keywords)
     if settings.provider == "none" or not settings.model.strip() or not job.strip():
         return rows
-    # Pass only posting content. Sample the beginning and the qualifications at
-    # the end when a posting would otherwise overflow a small local context.
-    excerpt = job if len(job) <= 12000 else job[:8000] + "\n…\n" + job[-4000:]
+    # Exclude non-hiring sections before sending context to the model. Sending
+    # the raw tail of a long job advert previously amplified salary/privacy text.
+    cleaned = "\n".join(row.text for row in passages(job))
+    excerpt = cleaned[:12000]
     try:
         reading = ask(settings, Reading, _SYSTEM,
-                      {"posting": excerpt, "existing_capabilities": [row["term"] for row in rows[:28]]}, 850)
+                      {"posting": excerpt}, 850)
     except (RuntimeError, OSError):
         return rows
 
@@ -64,7 +67,9 @@ def analyze_posting(profile, job, keywords, settings):
     by_model = {}
     for finding in reading.requirements:
         quote = " ".join(finding.quote.split())
-        if quote.casefold() not in quoted_source:
+        # Passage parsing normalizes terminal punctuation, but the model may
+        # legitimately quote the original sentence including its final period.
+        if quote.casefold().rstrip(" .") not in quoted_source:
             continue
         name = _capability_key(finding.capability)
         row = by_label.get(name) or by_alias.get(name)
@@ -74,22 +79,30 @@ def analyze_posting(profile, job, keywords, settings):
             row = {**_evidence_for(target, records, profile.skills, education),
                    "terms": row.get("terms", [target.term])}
             by_label[_capability_key(row["term"])] = row
+        source_passage = next((source for source in passages(job)
+                               if quote.casefold().rstrip(" .") in source.text.casefold()), None)
+        if source_passage is None:
+            continue
+        # A new, unrecognized capability may be a useful paraphrase of a
+        # specific task. Validate it against the quoted source instead of
+        # requiring every word to appear verbatim in the job posting.
+        lexical = row and any(keyword_matches(quote, term)
+                              for term in [row["term"], *row["terms"]])
+        semantic = grounded_label(finding.capability, quote)
+        if not lexical and not semantic:
+            continue
         if row is None:
             if not valid_requirement_term(finding.capability):
                 continue
-            if not literal_pattern(finding.capability).search(quote):
+            rank = score([source_passage], [source_passage.text])
+            if not rank:
                 continue
-            ranking = score(passages(job), [finding.capability])
-            if not ranking:
-                continue
-            _, weight, required, rationale = ranking
+            _, weight, required, rationale = rank
             kind = "credential" if (finding.kind == "credential" or credential_requirement(finding.capability)) \
                    else "strength" if finding.kind == "strength" else "skill"
             target = Keyword(term=finding.capability, weight=weight, required=required,
                              rationale=rationale, kind=kind)
             row = {**_evidence_for(target, records, profile.skills, education), "terms": [target.term]}
-        if not any(keyword_matches(quote, term) for term in [row["term"], *row["terms"]]):
-            continue
         key = _capability_key(row["term"])
         by_label.setdefault(key, row)
         if key not in by_model:
@@ -109,14 +122,18 @@ def analyze_posting(profile, job, keywords, settings):
             return -1, -(by_model.get(key, position) + position / 100)
         if key in explicit or row["rationale"] == "User requested priority.":
             return 2, -position
-        base = 1 / (3 + position)
-        support = .9 / (3 + by_model[key]) if key in by_model else 0
-        if row["weight"] <= 2:
-            support *= .25
-        # Apply the model's ranking within each requirement tier. A new
-        # quoted requirement can enter the core tier on the same evidence as
-        # a known term. Optional suggestions cannot displace mandatory work.
-        core = row["required"] or row["weight"] == 5
-        return int(core), base + support
+        # Ranked, source-quoted model results take precedence within their
+        # importance tier. Unselected catalog matches cannot outrank an
+        # explicitly ranked requirement merely because the catalog contains
+        # more synonyms or repeated product names.
+        optional = row.get("rationale", "").startswith(("Preferred qualification", "One of several example"))
+        # The model reads the entire posting without catalogue suggestions.
+        # A core responsibility it ranks highly must beat an unselected
+        # mandatory keyword merely because that keyword has many aliases.
+        if key in by_model:
+            # Explicit mandatory work selected by the reader outranks duties;
+            # selected duties still outrank unselected catalog matches.
+            return (1 if optional else 4 if row["required"] else 3), 1, -by_model[key]
+        return (1 if optional else 2 if row["required"] or row["weight"] >= 4 else 1), 0, -position
 
     return sorted(by_label.values(), key=priority, reverse=True)

@@ -18,6 +18,116 @@ class Capability:
 # Alternate expressions in a posting form one priority. Neighbors help identify
 # transferable experience but do not establish an exact match to that priority.
 CAPABILITIES = (
+    # Cloud defense engineering: platforms, telemetry, and unified visibility.
+    Capability("Cloud security telemetry and alerting infrastructure", (
+        "cloud security telemetry", "security telemetry", "telemetry, logging, and alerting",
+        "telemetry, monitoring, and alerting infrastructure", "cloud security logging",
+        "logging and alerting", "alerting infrastructure", "log ingestion",
+        "log storage", "log retention", "log retrieval",
+        "cloud detection and response platform", "cloud security monitoring infrastructure"),
+        ("alert ingestion", "SLO alerts", "Datadog", "logging", "log analysis",
+         "monitoring", "runbooks", "SIEM", "cloud logging")),
+    Capability("Multi-cloud security engineering", (
+        "multi-cloud experience", "multi-cloud environment", "multi-cloud environments",
+        "multiple cloud environments", "multi-cloud security", "multi-cloud",
+        "cloud and security engineering", "cloud engineering", "cloud defensive operations",
+        "directly managing cloud security infrastructure"),
+        ("AWS", "Amazon Web Services", "Azure", "Microsoft Azure", "GCP",
+         "Google Cloud Platform", "Infrastructure as Code", "Terraform", "Docker")),
+    Capability("Unified SIEM and CNAPP threat visibility", (
+        "unified threat visibility", "unified view", "unified data platforms",
+        "cloud-native application protection", "cloud native application protection",
+        "CNAPP", "SIEM platforms", "detection & SIEM", "detection and SIEM",
+        "log-analytics platforms", "security log analytics", "cloud-native alerts"),
+        ("SIEM", "Splunk", "Datadog", "incident response", "alert ingestion",
+         "Microsoft Azure", "AWS", "Google Cloud Platform")),
+    Capability("Security data engineering and correlation", (
+        "correlating data across systems", "data modeling", "data correlation",
+        "correlating security data", "AI-driven correlation", "security data",
+        "data modeling or correlating", "correlation across data sources",
+        "log ingestion, storage, retention, and retrieval"),
+        ("SQL", "Python", "Datadog", "log ingestion", "alert ingestion", "SIEM",
+         "automated reporting", "data pipelines")),
+    Capability("AI-assisted detection engineering", (
+        "AI-infused security engineering", "AI-driven correlation",
+        "AI-assisted engineering", "AI-driven security", "applied AI",
+        "AI tools for building", "AI for detection", "AI into how we build",
+        "AI can change how we build"),
+        ("LLM-powered", "AI-assisted development", "AI code-review",
+         "AI assistant", "Python", "automation")),
+    Capability("Cloud security guardrails and detection coverage", (
+        "configuration guardrails", "guardrails and improvements",
+        "cloud security guardrails", "gaps in visibility", "gaps in coverage",
+        "visibility or coverage", "close gaps in visibility", "security guardrails",
+        "cloud-native guardrails"),
+        ("Infrastructure as Code", "AWS", "Azure", "Google Cloud Platform",
+         "Terraform", "security controls", "Datadog")),
+
+    # Product security is its own discipline, not a synonym for perimeter WAF
+    # operations. Each family captures job responsibilities and transferable
+    # evidence, while related terms are not treated as exact experience.
+    Capability("Product security architecture", (
+        "product security architecture", "security architecture for", "define security architecture",
+        "security architecture", "secure-by-default", "reference implementations",
+        "security patterns", "product security", "application security architecture"),
+        ("AWS", "Google Cloud", "Microsoft Azure", "Infrastructure as Code", "security design reviews",
+         "threat modeling", "web application security")),
+    Capability("Security design reviews", (
+        "security engineering reviews", "security design reviews", "security design review",
+        "security reviews for", "high-risk product features", "design tradeoffs",
+        "security design tradeoffs", "architecture reviews"),
+        ("code review", "AI code-review", "OWASP ZAP", "risk reviews", "secure SDLC")),
+    Capability("Threat modeling and attack surface analysis", (
+        "threat modeling and attack surface analysis", "threat modeling", "threat modelling",
+        "attack surface analysis", "attack surface", "threat models", "trust boundaries"),
+        ("OWASP ZAP", "Vulnerability Analysis", "security reviews", "risk assessments")),
+    Capability("Vulnerability management and remediation", (
+        "vulnerability management", "vulnerability remediation", "systemic classes of vulnerability",
+        "remediation of systemic", "vulnerability triage", "vulnerability prioritization",
+        "internal security reports", "security reports"),
+        ("bug bounty", "vulnerability scanning", "remediation tracking", "OWASP ZAP",
+         "Vulnerability Analysis", "security findings")),
+    Capability("Bug bounty triage", (
+        "bug bounty triage", "bug bounty submissions", "bug bounty platforms",
+        "bug bounty program", "bug bounty", "bug bounty reports"),
+        ("vulnerability triage", "vulnerability scanning", "remediation tracking",
+         "Vulnerability Analysis")),
+    Capability("Web application security", (
+        "web application security", "web application security principles",
+        "common attack vectors", "OWASP Top 10", "web attacks",
+        "product/application security", "application security"),
+        ("OWASP ZAP", "Burp Suite", "DAST", "SAST", "vulnerability scanning", "REST APIs")),
+    Capability("Application security testing", (
+        "application testing tools", "application security testing",
+        "web application testing", "Burp Suite", "OWASP ZAP", "browser developer tools",
+        "SAST tools", "SAST", "DAST", "Semgrep", "Snyk", "Cycode"),
+        ("OWASP ZAP", "vulnerability scanning", "code review", "security testing")),
+    Capability("Security champions and developer enablement", (
+        "security champions program", "security champions", "developer security training",
+        "product security training", "developer enablement", "developer training",
+        "mentor other engineers", "security training programs"),
+        ("playbook", "trained", "mentored", "engineering documentation", "code-review tools")),
+    Capability("Secure SDLC and security tooling", (
+        "secure SDLC", "secure software development lifecycle", "secure development",
+        "SDLC best practices", "security services and tooling",
+        "security tooling consumed by product teams", "developer security tooling"),
+        ("GitHub Actions", "CI/CD", "OWASP ZAP", "code review", "automation", "Git")),
+    Capability("Product security technical leadership", (
+        "lead security engineering reviews", "engineering leadership",
+        "authoritative technical voice", "technical voice on product security",
+        "mentor other engineers", "mentoring engineers", "design tradeoffs"),
+        ("leadership", "stakeholder coordination", "security review playbook", "training")),
+    Capability("Cloud infrastructure security", (
+        "cloud infrastructure security", "cloud infrastructure", "cloud security",
+        "container technologies", "container security", "major cloud provider",
+        "one major cloud provider"),
+        ("AWS", "Google Cloud Platform", "GCP", "Microsoft Azure", "Docker",
+         "Terraform", "Infrastructure as Code", "IaC", "Linux/Unix")),
+    Capability("Programming languages", (
+        "modern programming language", "programming language", "at least one modern programming language"),
+        ("Python", "Ruby", "Java", "Kotlin", "TypeScript", "JavaScript")),
+    Capability("Security on-call", ("security on-call", "on-call rotation", "security on-call rotation"),
+        ("incident response", "runbooks", "on-call", "SLO alerts")),
     Capability("WAF administration", ("WAF administration", "WAF operations", "WAF management",
         "web application firewall administration", "web application firewall operations",
         "web application firewall", "web application firewalls", "Cloudflare WAF", "WAF",
@@ -41,13 +151,13 @@ CAPABILITIES = (
          "Role-based Access Control", "RBAC", "Linux", "Unix")),
     Capability("DDoS and bot mitigation", ("DDoS and bot mitigation", "DDoS mitigation",
         "distributed denial of service", "bot protection", "bot management", "rate limiting",
-        "OWASP Top 10 protections", "OWASP Top 10", "attack mitigation"),
+        "attack mitigation", "volumetric attacks"),
         ("OWASP ZAP", "Vulnerability Analysis", "Datadog", "Splunk", "SIEM", "TCP/IP", "AWS",
          "Microsoft Azure", "Linux", "Unix")),
     Capability("WAF monitoring and incident response", ("WAF monitoring and incident response",
-        "WAF monitoring", "WAF incident response", "WAF incidents", "traffic analysis",
-        "malicious traffic analysis", "attack investigation", "IP blocklisting", "IP blocklist",
-        "blocklisting", "blocklist", "SIEM", "Security Operations Center", "SOC operations"),
+        "WAF monitoring", "WAF incident response", "WAF incidents", "WAF traffic analysis",
+        "WAF traffic investigation", "WAF IP blocklisting", "WAF blocklist",
+        "WAF telemetry", "WAF events", "WAF logs"),
         ("incident response", "logs", "runbooks", "on-call", "SLO alerts", "Datadog", "Splunk",
          "OWASP ZAP", "TCP/IP", "Linux", "Unix")),
     Capability("Agentic engineering harnesses", ("agentic engineering harnesses", "agentic engineering harness",
@@ -68,7 +178,7 @@ CAPABILITIES = (
     Capability("SDLC automation", ("SDLC automation", "automate software development lifecycle",
         "software development lifecycle automation", "software development lifecycle processes", "automate the software development lifecycle",
         "automated software delivery", "AI-driven SDLC"), ("CI/CD", "GitHub Actions", "AI code-review", "deployment automation")),
-    Capability("Programming and scripting", ("programming, scripting", "scripting", "programming skills",
+    Capability("Programming and scripting", ("programming, scripting", "programming and infrastructure as code", "programming experience", "scripting", "programming skills",
         "scripting skills"), ("Python", "Bash", "PowerShell", "Linux", "Unix", "Go language", "JavaScript")),
     Capability("Platform integrations", ("integrating development platforms", "integrate engineering platforms",
         "platform integrations", "engineering integrations", "API integrations"),
@@ -117,10 +227,10 @@ class Passage:
 
 
 _HEADINGS = {
-    "preferred": r"(?:preferred|desirable|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
-    "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|qualifications",
-    "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|the role|your impact",
-    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|about (?:us|the company)|how to apply",
+    "preferred": r"(?:preferred|desirable|desired(?:\s+skills?\s*/\s*certifications?)?|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
+    "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|you should have|must[- ]have(?: technical/functional skills)?|qualifications",
+    "duties": r"(?:key |primary |core )?(?:responsibilities|duties)|what you(?:'|’)ll do|where you(?:'|’)ll make an impact|the role|your impact",
+    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company|flexport)|how to apply|how we work|why this role is special|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
 }
 _EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
 _PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|good[- ]to[- ]have|bonus|a plus)\b", re.I)
@@ -155,7 +265,16 @@ def passages(job):
 
 
 def locations(row, terms):
-    return [match.start() for term in terms for match in [literal_pattern(term).search(row.text)] if match]
+    positions = []
+    for term in terms:
+        for match in literal_pattern(term).finditer(row.text):
+            # "Without the SOC or on-call rotation" describes excluded work,
+            # not a competency the employer wants applicants to demonstrate.
+            prefix = row.text[max(0, match.start() - 45):match.start()]
+            if re.search(r"\b(?:without|no|not requiring|rather than|instead of)\s+(?:(?:a|an|the)\s+)?(?:[\w-]+\s+){0,3}$", prefix, re.I):
+                continue
+            positions.append(match.start())
+    return positions
 
 
 def score(rows, phrases, cues=()):
@@ -206,7 +325,13 @@ _FRAGMENT_EDGE = re.compile(
 def valid_observed_phrase(phrase):
     """Reject clipped prepositional fragments while retaining complete noun phrases."""
     phrase = phrase.strip(" ,.;:()")
-    return bool(phrase and not _FRAGMENT_EDGE.search(phrase))
+    return bool(phrase and not _FRAGMENT_EDGE.search(phrase)
+                and normalize(phrase) not in {
+                    "not", "tools", "analyzing", "clouds", "gcs",
+                    "modern software", "working relationships",
+                    "modern engineering depth", "cross system thinking",
+                    "curiosity", "ownership", "att", "ck", "az",
+                })
 
 
 def _listed_requirements(row):
@@ -244,7 +369,10 @@ def observed_phrases(rows):
             continue
         # Product names like SnowplowDB, OASIS and OpenTelemetry.
         tokens = _listed_requirements(row)
-        tokens.extend(re.findall(r"(?<![\w])(?:[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[A-Z]{2,}[A-Z0-9]{0,9})(?![\w])", row.text))
+        # Long lists of preferred product examples and certifications are not
+        # standalone mandatory skills. Known aliases still capture real tools.
+        if row.section != "preferred" and len(row.text.split()) <= 18:
+            tokens.extend(re.findall(r"(?<![\w])(?:[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[A-Z]{3,}[A-Z0-9]{0,9})(?![\w])", row.text))
         # A short object after a concrete duty or requirement carries more
         # meaning than isolated bag-of-words fragments from the whole advert.
         for match in re.finditer(
@@ -254,6 +382,6 @@ def observed_phrases(rows):
             if valid_observed_phrase(phrase) and len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
                 tokens.append(phrase)
         for text in tokens:
-            if normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents"}:
+            if valid_observed_phrase(text) and normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents", "applicants", "gdpr", "ccpa", "li-va1", "psi", "salaries", "salary", "pay range", "are multiplied"}:
                 seen.setdefault(normalize(text), text)
     return list(seen.values())

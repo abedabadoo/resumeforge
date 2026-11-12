@@ -1,6 +1,6 @@
 # ResumeForge
 
-A native Windows desktop app for tailoring a resume and saving a checked PDF. A browser interface is also available for local use. It turns a structured profile into a searchable, selectable PDF using a fixed template. The writing model proposes content; the renderer controls typography. No ChatGPT subscription, conversation, or Codex process is needed to run the installed app.
+A native Windows and Intel macOS desktop app for tailoring a resume and saving a checked PDF. A browser interface is also available for local use. It turns a structured profile into a searchable, selectable PDF using a fixed template. The writing model proposes content; the renderer controls typography. No ChatGPT subscription, conversation, or Codex process is needed to run the installed app.
 
 [Laptop evaluation, training results and known limits](Laptop-validation.md)
 
@@ -14,7 +14,23 @@ The first launch can build with offline examples. To generate new wording with Q
 
 For development from a Windows source checkout with Python installed, run **Launch ResumeForge on Windows.cmd**. To recreate the downloadable installer, run `python tools/windows/build.py --work dist/build --out dist/windows` with Go and NSIS available. `tools/windows/runtime-lock.json` records the downloads and SHA-256 hashes.
 
-## Start on this Mac
+## Install the native app on an Intel Mac
+
+Download the latest **ResumeForge-macOS-Intel.dmg** or **ResumeForge-macOS-Intel.zip** from the [GitHub Releases page](https://github.com/abedabadoo/resumeforge/releases). The packaged **ResumeForge.app** runs on Intel (x86_64) Macs with **macOS 13 or newer**. Open the DMG, drag the app into Applications, then double-click ResumeForge. It includes the Python runtime and native Qt window; there is no need to install Python or start a web server.
+
+The Intel Mac preview is **not Apple Developer ID signed or notarized**. macOS may prevent the first launch; if you trust the downloaded file, use Finder's Open command or **System Settings → Privacy & Security → Open Anyway**. The app opens a fictional starter profile and stores your workspace in `~/Library/Application Support/ResumeForge/workspace`.
+
+The downloadable app does not include AI model weights. You can run it without a model or configure Ollama / an OpenAI-compatible local endpoint in **Model settings**.
+
+### Updating on Intel Mac
+
+This build introduces **Check for updates…** in the desktop toolbar. After the first installation of an updater-enabled version, you no longer have to download a DMG and manually drag ResumeForge into Applications to get subsequent updates. Choose **Check for updates…**, approve the download and installation, and the app will verify the official GitHub release ZIP and its SHA-256 digest, save your workspace, replace the old app after exiting, and reopen automatically. A previous version remains in a hidden `.ResumeForge-previous.app` backup beside the installed copy.
+
+The current updater downloads the complete Intel Mac ZIP **in the background** (roughly 60–70 MB); it is not yet a differential/delta updater. It only accepts official releases with a matching digest, verified macOS app signature, and Intel binary. It never installs without your confirmation. If ResumeForge was launched from a DMG or a protected installation folder, the new copy is installed under `~/Applications/ResumeForge.app`, where later updates can replace it without asking for administrator privileges. Launch the new copy from that folder and update any Dock shortcut pointing to the old location. Your workspace is always separate at `~/Library/Application Support/ResumeForge/workspace`.
+
+For local development, use `python -m pip install -e ".[desktop]"` and `python -m resumeforge.desktop`. The build script is `tools/macos/build.py` and the Intel macOS GitHub Actions workflow creates ZIP and DMG downloads.
+
+## Alternative: browser version on Mac
 
 Double-click **Launch ResumeForge.command**, or run:
 
@@ -135,6 +151,6 @@ Tests include actual PDF rendering and extraction, fitting failures, immutable t
 
 ## Current scope
 
-This version supports the supplied resume's single-column, one-page structure: experience, skills/certifications/interests, and education. It does not provide OCR, arbitrary PDF layout cloning, multi-column/multi-page templates, a native macOS window, or DOCX output. Generic import is conservative and may require manual mapping. A model-assisted semantic reviewer is a useful check, not a guarantee of factual correctness. Review the finished wording before using it in an application.
+This version supports the supplied resume's single-column, one-page structure: experience, skills/certifications/interests, and education. It does not provide OCR, arbitrary PDF layout cloning, multi-column/multi-page templates, or DOCX output. The native macOS download is currently an unsigned Intel preview (not a notarized public release). Generic import is conservative and may require manual mapping. A model-assisted semantic reviewer is a useful check, not a guarantee of factual correctness. Review the finished wording before using it in an application.
 
 The font files remain under their included SIL Open Font License. No original PDF/DOCX is bundled in the application.

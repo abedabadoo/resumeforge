@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import threading
+import sys
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
@@ -26,6 +27,12 @@ from .planning import analyze_job
 class TaskSignals(QObject):
     progress = Signal(str)
     done = Signal(object)
+    failed = Signal(str)
+
+
+class UpdateSignals(QObject):
+    checked = Signal(object)
+    prepared = Signal(object)
     failed = Signal(str)
 
 
@@ -124,6 +131,11 @@ class MainWindow(QMainWindow):
         self.signals.progress.connect(self._progress)
         self.signals.done.connect(self._done)
         self.signals.failed.connect(self._failed)
+        self.update_signals = UpdateSignals(self)
+        self.update_signals.checked.connect(self._update_checked)
+        self.update_signals.prepared.connect(self._update_prepared)
+        self.update_signals.failed.connect(self._update_failed)
+        self._updating = False
         self.setWindowTitle("ResumeForge")
         self.resize(1220, 835)
         self.setMinimumSize(790, 590)
@@ -158,7 +170,11 @@ class MainWindow(QMainWindow):
         self.import_button = button("Import resume…", "importButton", self.import_resume)
         self.save_button = button("Save workspace", "saveButton", self.save_workspace)
         self.settings_button = button("Model settings…", "settingsButton", self.configure_model)
-        for widget in (self.import_button, self.save_button, self.settings_button):
+        self.update_button = button("Check for updates…", "updateButton", self.check_for_updates)
+        controls = [self.import_button, self.save_button, self.settings_button]
+        if sys.platform == "darwin" and getattr(sys, "frozen", False):
+            controls.append(self.update_button)
+        for widget in controls:
             top.addWidget(widget)
         outer.addWidget(header)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -786,6 +802,84 @@ class MainWindow(QMainWindow):
         selection = review_proposals(self, self.profile, plan)
         if selection is not None:
             self._build(*selection)
+
+    def check_for_updates(self):
+        """Check official GitHub Releases asynchronously; never auto-install."""
+        if self._updating:
+            return
+        self._updating = True
+        self.update_button.setEnabled(False)
+        self.status.setText("Checking for an Intel Mac update…")
+
+        def work():
+            try:
+                from .mac_updates import check_for_update
+                self.update_signals.checked.emit(check_for_update())
+            except Exception as exc:
+                self.update_signals.failed.emit(str(exc))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_checked(self, update):
+        if update is None:
+            self._finish_update("ResumeForge is up to date.")
+            QMessageBox.information(self, "ResumeForge updates", "You're running the latest available Intel Mac release.")
+            return
+        size = round(update.size / (1024 * 1024))
+        question = (f"ResumeForge {update.tag} is available ({size} MB).\n\n"
+                    "ResumeForge will download and verify the update, close, replace "
+                    "the app, then reopen it. Your saved workspace stays intact.\n\n"
+                    "Download this update?")
+        answer = QMessageBox.question(self, "ResumeForge update available", question,
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                      QMessageBox.StandardButton.Yes)
+        if answer != QMessageBox.StandardButton.Yes:
+            self._finish_update("Update cancelled.")
+            return
+        self.status.setText("Downloading and verifying the Intel Mac update…")
+
+        def work():
+            try:
+                from .mac_updates import prepare_update
+                self.update_signals.prepared.emit(prepare_update(update))
+            except Exception as exc:
+                self.update_signals.failed.emit(str(exc))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_prepared(self, prepared):
+        from .mac_updates import install_after_exit
+        move = (f"\n\nThis copy is in a protected location. The updated version will "
+                f"be installed at:\n{prepared.destination_app}"
+                if prepared.installed_app != prepared.destination_app else "")
+        answer = QMessageBox.question(
+            self, "Ready to install", "The update passed integrity and app-signature checks."
+            + move + "\n\nClose ResumeForge and install it now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if answer != QMessageBox.StandardButton.Yes:
+            import shutil
+            shutil.rmtree(prepared.temp_dir, ignore_errors=True)
+            self._finish_update("Update downloaded but installation was cancelled.")
+            return
+        self.close()
+        if self.isVisible():
+            self._finish_update("Close cancelled; update was not installed.")
+            return
+        try:
+            install_after_exit(prepared)
+        except Exception as exc:
+            self.show()
+            self._update_failed(str(exc))
+
+    def _update_failed(self, message):
+        self._finish_update("Update could not be completed.")
+        QMessageBox.warning(self, "ResumeForge update", str(message))
+
+    def _finish_update(self, status):
+        self._updating = False
+        self.update_button.setEnabled(True)
+        self.status.setText(status)
 
     def closeEvent(self, event):
         if self.worker is not None:
