@@ -150,8 +150,23 @@ def _direct_job_points(skill: str, rows) -> float:
     _, _, _, match = _helpers()
     points = []
     for row in rows:
+        base = _SECTION_POINTS.get(row.section, 30)
         if match(row.text, skill):
-            points.append(_SECTION_POINTS.get(row.section, 30))
+            points.append(base)
+            continue
+        # Generic capability transfer: when a posting requires a broad
+        # category ("scripting", "CI/CD", "cloud infrastructure") and the
+        # profile contains a related concrete tool (Python, GitHub Actions,
+        # a named cloud platform), the tool earns *partial* relevance rather
+        # than disappearing because the employer didn't name it verbatim.
+        # An exact skill match always earns more than this relationship.
+        for cap in priorities.CAPABILITIES:
+            if (cap.related and
+                    any(priorities.literal_pattern(term).search(row.text)
+                        for term in cap.phrases) and
+                    any(match(skill, adjacent) for adjacent in cap.related)):
+                points.append(base * .53)
+                break
     return max(points, default=0.0)
 
 
