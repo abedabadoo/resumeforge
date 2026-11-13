@@ -208,7 +208,7 @@ _WORK_VERB = re.compile(
     r"automate\w*|manag\w*|buil[dt]\w*|develop\w*|design\w*|integrat\w*|test\w*|"
     r"operat\w*|monitor\w*|maintain\w*|enforc\w*|harden\w*|validat\w*|migrat\w*|"
     r"provision\w*|review\w*|troublesh\w*|remediat\w*|creat\w*|implement\w*|"
-    r"wrot\w*|administ\w*|analy[sz]\w*|run|ran|execut\w*|resolv\w*|perform\w*|reconcil\w*|inspect\w*|train\w*|teach\w*|assess\w*|prepar\w*|calculat\w*|schedul\w*|deliver\w*|evaluat\w*)\b", re.I)
+    r"wrot\w*|administ\w*|analy[sz]\w*|run|ran|execut\w*|resolv\w*|perform\w*|reconcil\w*|inspect\w*|train\w*|teach\w*|assess\w*|prepar\w*|calculat\w*|schedul\w*|deliver\w*|evaluat\w*|standardiz\w*|enhanc\w*|upgrad\w*|refactor\w*)\b", re.I)
 
 
 def _positive_use(evidence: str, term: str) -> bool:
