@@ -57,6 +57,59 @@ def run(request: RunRequest, directory: Path, progress: Callable[[str], None] | 
         CALLS.reset(token)
 
 
+def _fit_reconciled_skills(typesetter, profile, plan, initial_skills, required_slots,
+                           request, *, verified=False):
+    """Allocate Skills and experience together without requiring manual page fit.
+
+    Start with source-backed skills, measure the actual printable bullets,
+    then reconcile technical skills demonstrated by *selected* achievements.
+    If fitting changes the printed examples, repeat before accepting the
+    final skills. A source skill is always eligible; a generated example alone
+    cannot make a new skill eligible unless that example was actually chosen.
+    """
+    from .planning import selected_skills
+
+    def fit_bounded(candidates):
+        fitted = typesetter.fit(profile, plan, candidates, required_slots)
+        if not fitted.feasible:
+            for count in range(len(candidates) - 1, -1, -1):
+                trimmed = candidates[:count]
+                alternative = typesetter.fit(profile, plan, trimmed, required_slots)
+                if alternative.feasible:
+                    return alternative, trimmed
+        return fitted, candidates
+
+    chosen, skills = fit_bounded(initial_skills)
+    previously = set()
+    for _ in range(5):
+        ranked = selected_skills(
+            profile, plan, request.settings, request.edit_request,
+            job_description=request.job_description, selected=chosen.selected)
+        if verified:
+            ranked = [skill for skill in ranked if skill in profile.skills]
+        if ranked == skills:
+            break
+        signature = (tuple(c.id for c in chosen.selected), tuple(skills))
+        if signature in previously:
+            break
+        previously.add(signature)
+        chosen, skills = fit_bounded(ranked)
+
+    # One final provenance check: if layout changed which fictional example
+    # prints, remove any promoted term not supported by the current selection.
+    eligible = selected_skills(
+        profile, plan, request.settings, request.edit_request,
+        job_description=request.job_description, selected=chosen.selected)
+    if verified:
+        eligible = [skill for skill in eligible if skill in profile.skills]
+    from .skills import _identity
+    permitted = {_identity(skill) for skill in eligible}
+    if any(_identity(skill) not in permitted for skill in skills):
+        reduced = [skill for skill in skills if _identity(skill) in permitted]
+        chosen, skills = fit_bounded(reduced)
+    return chosen, skills
+
+
 def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] | None = None) -> dict:
     progress = progress or (lambda _: None)
     directory.mkdir(parents=True, exist_ok=True)
@@ -164,7 +217,9 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
     for index in range(rounds):
         plan.candidates = [c for c in plan.candidates if c.id not in rejected]
         validate_plan(profile, plan, inspiration=inspiration)
-        skills = selected_skills(profile,plan,request.settings,request.edit_request)
+        skills = selected_skills(
+            profile, plan, request.settings, request.edit_request,
+            job_description=request.job_description)
         progress(f"Measuring bullet alternatives and rendering page (pass {index+1}/{rounds})")
         from .edit_constraints import length_spec,unsupported_brief
         length,ambiguous=length_spec(profile,request.edit_request)
@@ -185,17 +240,9 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if verified:
             from .wording import verified_material
             fit_plan,skills = verified_material(profile,fit_plan,skills)
-        selection = typesetter.fit(profile,fit_plan,skills,required_slots)
-        if not selection.feasible and skills:
-            # Recover automatically if long Skills rows leave too little room
-            # for the required experience bullets. The list is relevance-
-            # ordered, so shed the least important entries first.
-            for count in range(len(skills) - 1, -1, -1):
-                trimmed = skills[:count]
-                alternative = typesetter.fit(profile,fit_plan,trimmed,required_slots)
-                if alternative.feasible:
-                    skills, selection = trimmed, alternative
-                    break
+        selection, skills = _fit_reconciled_skills(
+            typesetter, profile, fit_plan, skills, required_slots, request,
+            verified=verified)
         pdf_path = directory / f"pass-{index+1}.pdf"
         report = typesetter.render(selection, pdf_path)
         progress(f"Checking text, evidence and page geometry (pass {index+1}/{rounds})")
