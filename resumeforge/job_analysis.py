@@ -8,7 +8,7 @@ from .models import Keyword, Model
 from .planning import (_canonical, _evidence_for, analyze_job, credential_requirement,
                        keyword_matches, valid_requirement_term)
 from .priorities import capability, literal_pattern, normalize, passages, score
-from .requirement_extraction import grounded_label
+from .requirement_extraction import grounded_label, word_stems
 
 
 class Requirement(Model):
@@ -37,6 +37,63 @@ def _capability_key(term):
     canonical = _canonical(term)
     group = capability(canonical)
     return normalize(group.label if group else canonical)
+
+
+def _distinct_requirements(rows):
+    """Consolidate near-identical capability labels while retaining evidence.
+
+    A job can describe the same work as a broad responsibility, a required
+    qualification, and a tooling example. Those should not become three
+    separate priorities. Compare *semantic content words* after ranking;
+    keep distinct platform competencies and never discard stronger source
+    evidence or an explicitly required capability for a weaker mention.
+    """
+    def content(term):
+        text = term.casefold().replace("vb scripts", "vbscript")
+        words = word_stems(text)
+        normalized = set()
+        for word in words:
+            if word in {"service", "platform", "system", "tool", "experience",
+                        "skill", "knowledge", "including", "other"}:
+                continue
+            if word.startswith(("automat", "automa")):
+                word = "automat"
+            elif word.startswith("administ"):
+                word = "administ"
+            elif word.startswith("manag"):
+                word = "manag"
+            elif word.startswith("configur"):
+                word = "configur"
+            normalized.add(word)
+        return normalized
+
+    kept = []
+    for row in rows:
+        target = content(row["term"])
+        duplicate = False
+        for previous in kept:
+            if row["kind"] != previous["kind"]:
+                continue
+            earlier = content(previous["term"])
+            if not target or not earlier:
+                continue
+            shared = target & earlier
+            # Require meaningful multiword overlap. "Network security" and
+            # "endpoint security" should never collapse into one skill.
+            if (len(shared) < 3 or
+                    len(shared) / min(len(target), len(earlier)) < .8):
+                continue
+            if row["required"] and not previous["required"]:
+                continue
+            if row["evidence"] == "exact" and previous["evidence"] != "exact":
+                continue
+            if row["rationale"].startswith("User requested priority."):
+                continue
+            duplicate = True
+            break
+        if not duplicate:
+            kept.append(row)
+    return kept
 
 
 def analyze_posting(profile, job, keywords, settings):
@@ -157,4 +214,4 @@ def analyze_posting(profile, job, keywords, settings):
             return (1 if optional else 4 if row["required"] else 3), 1, -by_model[key]
         return (1 if optional else 2 if row["required"] or row["weight"] >= 4 else 1), 0, -position
 
-    return sorted(by_label.values(), key=priority, reverse=True)
+    return _distinct_requirements(sorted(by_label.values(), key=priority, reverse=True))
