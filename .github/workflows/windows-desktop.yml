@@ -108,7 +108,7 @@ jobs:
           }
           if ($launcher.ExitCode -ne 0) { throw "Launcher exited with $($launcher.ExitCode)" }
 
-      - name: Check native preview, PDF export and underfilled-draft rejection
+      - name: Check native preview, PDF export and safe underfilled-draft handling
         shell: pwsh
         run: |
           $root = (Resolve-Path "$env:RUNNER_TEMP/ResumeForge smoke/ResumeForge").Path
