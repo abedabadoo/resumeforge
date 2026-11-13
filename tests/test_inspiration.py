@@ -39,7 +39,7 @@ class InspirationTests(unittest.TestCase):
             examples = result["report"]["inspiration_bullets"]
             self.assertGreaterEqual(len(examples), 2)
             self.assertEqual(result["profile"], self.profile.model_dump())
-            self.assertTrue(set(["Python", "AWS", "GitHub Actions", "Infrastructure as Code (IaC)"]) <= set(result["report"]["skills"]))
+            self.assertTrue(set(["Python", "AWS", "GitHub Actions", "Infrastructure as Code (IaC)"]) <= set(result["report"]["skills"]), result["report"]["skills"])
             pdf = PdfReader(Path(tmp) / "resume.pdf")
             self.assertEqual(len(pdf.pages), 1)
             text = " ".join(pdf.pages[0].extract_text().split())
