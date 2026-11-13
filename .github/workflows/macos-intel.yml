@@ -70,6 +70,17 @@ jobs:
           ditto -x -k "$RUNNER_TEMP/resumeforge-mac-dist/ResumeForge-macOS-Intel.zip" "$RUNNER_TEMP/resumeforge-zip-check"
           test -x "$RUNNER_TEMP/resumeforge-zip-check/ResumeForge.app/Contents/MacOS/ResumeForge"
           "$RUNNER_TEMP/resumeforge-zip-check/ResumeForge.app/Contents/MacOS/ResumeForge" --package-smoke-test
+          # Run the exact in-app update bundle validator against the extracted
+          # downloadable ZIP, with Apple developer tools intentionally disabled.
+          # The end user's Mac must not need Xcode's lipo/xcrun tools.
+          DEVELOPER_DIR=/nonexistent python - <<'PY'
+          import os
+          from pathlib import Path
+          from resumeforge.mac_updates import _bundle_check
+          app = Path(os.environ["RUNNER_TEMP"]) / "resumeforge-zip-check/ResumeForge.app"
+          _bundle_check(app)
+          print("Updater validated the ZIP without developer command-line tools")
+          PY
 
       - name: Test real macOS Cocoa window launch
         run: |

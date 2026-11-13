@@ -15,6 +15,7 @@ import plistlib
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -147,6 +148,33 @@ def _check_archive(path: Path) -> None:
                         parent.append(part)
 
 
+# Mach-O CPU types: CPU_ARCH_ABI64 | CPU_TYPE_X86.
+# Inspect the executable header directly instead of invoking /usr/bin/lipo,
+# which is an Xcode Command Line Tools utility and may fail on an ordinary Mac.
+_INTEL64_CPU = 0x01000007
+_MACHO64_ENDIAN = {
+    b"\xcf\xfa\xed\xfe": "<",  # MH_MAGIC_64, little endian
+    b"\xfe\xed\xfa\xcf": ">",  # MH_MAGIC_64, big endian
+}
+
+
+def _intel_macho(binary: Path) -> bool:
+    """Check the bundled executable's 64-bit Mach-O CPU type using Python only.
+
+    The separate codesign verification authenticates the extracted bundle;
+    this check enforces the correct native CPU family without requiring
+    Xcode, Homebrew, or the Apple developer CLI on the user's machine.
+    """
+    with binary.open("rb") as stream:
+        header = stream.read(32)
+    if len(header) < 32:
+        raise ValueError("The application executable is incomplete.")
+    endian = _MACHO64_ENDIAN.get(header[:4])
+    if endian is None:
+        raise ValueError("The application executable is not a 64-bit Mach-O binary.")
+    return struct.unpack_from(endian + "I", header, 4)[0] == _INTEL64_CPU
+
+
 def _bundle_check(app: Path) -> None:
     info = app / "Contents" / "Info.plist"
     binary = app / "Contents" / "MacOS" / "ResumeForge"
@@ -159,10 +187,8 @@ def _bundle_check(app: Path) -> None:
         raise ValueError("The update does not identify itself as ResumeForge")
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)],
                    check=True, capture_output=True, timeout=30)
-    arches = subprocess.run(["/usr/bin/lipo", "-archs", str(binary)],
-                            check=True, capture_output=True, text=True, timeout=10).stdout.split()
-    if arches != ["x86_64"]:
-        raise ValueError(f"Incorrect Mac CPU architecture: {arches}")
+    if not _intel_macho(binary):
+        raise ValueError("This update is not built for an Intel (x86_64) Mac.")
 
 
 def _install_target(current: Path) -> Path:
