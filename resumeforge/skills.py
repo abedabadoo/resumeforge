@@ -225,7 +225,10 @@ def select_skills(profile: Profile, keywords: list[Keyword] | list[str],
     # the remaining space only on demonstrably relevant expertise.
     strongest = ranked[0].score
     if strongest >= 24:
-        minimum = min(8, len(ranked), limit)
+        # A resume with a substantial existing skills inventory still needs
+        # room for useful transferable technologies (e.g., a CI/CD platform
+        # adjacent to a delivery requirement), not only literal matches.
+        minimum = min(12, len(ranked), limit)
         cutoff = max(17.0, strongest * .16)
         relevant = [item for item in ranked if item.score >= cutoff]
         count = max(minimum, len(relevant))
