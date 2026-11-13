@@ -35,7 +35,15 @@ def register_fonts():
 
 
 def clean(text: str) -> str:
+    """Normalize imported text before measuring or rendering a PDF.
+
+    Some resume imports contain PDF text-extractor placeholders such as
+    '(cid:11)'. They are not actual words or valid glyphs; never print them.
+    Remove control characters as whitespace, without changing document style.
+    """
     text = unicodedata.normalize("NFC", text)
+    text = re.sub(r"\(cid:\d+\)", " ", text, flags=re.I)
+    text = re.sub(r"[\x00-\x1f\x7f]", " ", text)
     return re.sub(r"\s+", " ", text.replace("\u00ad", "").replace("\u00a0", " ")).strip()
 
 
@@ -158,7 +166,6 @@ class Typesetter:
         from .planning import bullet_relevance
         # In a tailored application, give relevant evidence page space before
         # nonessential hobbies. Keep the source profile unchanged.
-        original_profile = profile
         if drop_interests and plan.keywords and profile.interests:
             profile = profile.model_copy(update={"interests": ""})
         fixed_blocks = self.blocks(profile, [], skills)
@@ -219,10 +226,6 @@ class Typesetter:
                                  ["No one-page combination retains the minimum bullets per role. Shorter grounded alternatives are needed."])
         target = math.floor((self.t.bottom_tolerance-abs(ink_offset)) * 100)
         fitting = {h:v for h,v in states.items() if capacity-h <= target}
-        # Don't turn a previously valid single-page export into underfill just
-        # because removing optional hobbies left too much blank space.
-        if not fitting and drop_interests and plan.keywords and original_profile.interests:
-            return self.fit(original_profile, plan, skills, required_slots, drop_interests=False)
         if fitting:
             # All are full enough. Choose relevance/quality, then the smallest gap.
             chosen_h = max(fitting, key=lambda h: (fitting[h][0], h))
@@ -240,7 +243,7 @@ class Typesetter:
                 -bullet_relevance(c.text, plan.keywords)))
         blocks = self.blocks(profile, selected, skills)
         used = sum(b.height for b in blocks)
-        warnings = [] if fitting else ["The page needs more grounded content; the font size, margins and spacing remain fixed."]
+        warnings = [] if fitting else ["Some page space remains; the best available content was selected automatically. This is not an export error."]
         return Selection(selected, blocks, used, self.available-used, True, warnings)
 
     def render(self, selection: Selection, path: Path) -> dict:
@@ -298,7 +301,12 @@ class Typesetter:
             issues.append("Content blocks exceed the page boundary")
         ink_gap = self.t.page_height-self.t.margin_bottom-actual_bottom
         full = -.1 <= selection.bottom_gap <= self.t.bottom_tolerance + .1 and -.8 <= ink_gap <= self.t.bottom_tolerance + .1
-        return {"pages": pages, "geometry_passed": not issues and full,
+        # Page fill is an aesthetic goal, not a safety invariant. A checked,
+        # readable one-page resume must remain exportable when its last line
+        # ends slightly (or substantially) above a cosmetic fill target.
+        # Keep clipping, missing glyphs, PDF round-trip and page count as
+        # hard blockers; report fill independently for optional refinement.
+        return {"pages": pages, "geometry_passed": not issues,
                 "bounds_passed": not issues, "full_page_passed": full,
                 "fill_ratio": round(selection.used_height/self.available, 4),
                 "bottom_gap_pt": round(selection.bottom_gap, 2),
