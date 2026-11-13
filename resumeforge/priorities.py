@@ -401,7 +401,14 @@ def observed_phrases(rows):
             # professional nouns when a source list actually contains them.
             if len(term.split()) == 1 and not re.fullmatch(
                     r"(?:[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+|[A-Z]{3,}[0-9]{0,5})", term):
-                continue
+                # Short stand-alone preferred/required items can legitimately
+                # name an unfamiliar brand ("Preferred: Epic", "Salesforce").
+                # A lone capital at the START of a full sentence must not
+                # become a qualification ("Five years", "Create runbooks").
+                if not (row.section in {"preferred", "required"} and
+                        row.text.strip(" .,:;") == term and
+                        term[:1].isupper() and len(term) >= 4):
+                    continue
             seen.setdefault(norm, term)
 
     return list(seen.values())
