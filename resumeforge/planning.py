@@ -424,6 +424,10 @@ def selected_skills(profile, plan, settings, edit_request="",
     a selected achievement that demonstrates its actual use.
     """
     from .skills import select_skills
+    if not plan.keywords and not job_description:
+        # No tailoring target: preserve the existing Skills inventory and
+        # physical page geometry. Ranking must never rewrite a plain import.
+        return rank_skills(profile, [])
     ranked = select_skills(
         profile, plan.keywords, job_description=job_description,
         selected=selected, model_order=plan.skill_order)
