@@ -9,7 +9,7 @@ import hashlib
 from typing import Callable
 
 from .models import Candidate, Evidence, Plan, Profile, RunRequest, Template
-from .layout import Typesetter
+from .layout import Typesetter, clean
 from .planning import build_plan, keyword_matches, selected_skills, review_content
 
 
@@ -74,6 +74,17 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         prior.replace(directory/'previous-checked.pdf')
         (directory/'result.json').replace(directory/'previous-result.json')
     profile = request.profile.model_copy(deep=True)
+    # Normalize artifacts from uploaded PDF/DOCX content once, BEFORE
+    # generating source-backed alternatives and before semantic validation.
+    # Renderer, reviewer and exported document must agree on the same text.
+    for role in profile.roles:
+        for bullet in role.bullets:
+            bullet.text = clean(bullet.text)
+    for fact in profile.facts:
+        fact.text = clean(fact.text)
+    profile.skills = [clean(skill) for skill in profile.skills if clean(skill)]
+    profile.certifications = clean(profile.certifications)
+    profile.interests = clean(profile.interests)
     progress("Ranking keywords and preparing content alternatives")
     edit_options = {"edit_request":request.edit_request} if request.edit_request else {}
     if request.reviewed_priorities is not None:
@@ -107,6 +118,14 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         add_examples(profile, plan, request)
     else:
         plan = build_plan(profile, request.job_description, request.keywords, request.settings, **edit_options)
+    # Older saved plans may include raw imported text. Normalize the plan's
+    # candidates as well, so source matching and PDF verification agree.
+    for candidate in plan.candidates:
+        if candidate.parts:
+            candidate.parts = [clean(part) for part in candidate.parts]
+            candidate.text = " ".join(candidate.parts)
+        else:
+            candidate.text = clean(candidate.text)
     if request.draft_edits:
         from .inspiration import apply_edits
         apply_edits(plan, request.draft_edits)
@@ -211,15 +230,20 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
                 changes.append({"role_id":c.role_id,"before":"","after":c.text,"reason":c.rationale})
         report["changes"] = changes
         iterations.append({"pass":index+1,"bottom_gap_pt":report["bottom_gap_pt"],
-                           "geometry_passed":report["geometry_passed"],"quality_passed":review.passed,
+                           "geometry_passed":report["geometry_passed"],
+                           "full_page_passed":report["full_page_passed"],
+                           "quality_passed":review.passed,
                            "selected_ids":[c.id for c in selection.selected]})
         # Select the best completed pass; a failed later attempt cannot silently
         # replace an earlier fit. No failed pass is advertised as export-ready.
-        score = (report["geometry_passed"] and review.passed, report["bounds_passed"], review.passed,
+        score = (report["geometry_passed"] and review.passed,
+                 report["full_page_passed"], report["bounds_passed"], review.passed,
                  -abs(report["bottom_gap_pt"]))
         if best is None or score > best[0]:
             best = (score, pdf_path, report, selection, plan.model_copy(deep=True))
-        if report["geometry_passed"] and review.passed:
+        # A safe one-page PDF is already exportable; additional model passes
+        # may improve its visual fill but must never revoke that success.
+        if report["geometry_passed"] and review.passed and report["full_page_passed"]:
             break
         if unsupported_brief(profile,request.edit_request) or ambiguous:
             break # Unchanged fixed template or ambiguous instructions cannot be repaired by padding.
