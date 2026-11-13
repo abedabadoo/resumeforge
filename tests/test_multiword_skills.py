@@ -6,8 +6,13 @@ attributed accomplishment as well as the employer's posting.
 """
 import unittest
 
-from resumeforge.models import Bullet, Candidate, Keyword, Profile, Role
-from resumeforge.planning import analyze_job
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from resumeforge.engine import _fit_reconciled_skills
+from resumeforge.job_analysis import _distinct_requirements
+from resumeforge.layout import Typesetter
+from resumeforge.models import Bullet, Candidate, Keyword, ModelSettings, Plan, Profile, Role, RunRequest
+from resumeforge.planning import analyze_job, selected_skills
 from resumeforge.priorities import passages
 from resumeforge.skills import select_skills
 
@@ -99,6 +104,53 @@ class MultiwordSkillsTests(unittest.TestCase):
         term = next(x for x in rows if x["term"].casefold() == "comptia")
         self.assertEqual(term["evidence"], "exact", term)
         self.assertIn("CompTIA Security+", term["exact_certifications"])
+
+    def test_compound_skill_labels_survive_actual_page_fitting(self):
+        profile_obj = profile(["Microsoft Azure", "AWS", "OWASP ZAP"])
+        profile_obj.roles[0].bullets = [
+            Bullet(id=f"b{i}", text=f"Maintained system process {i} for business operations.")
+            for i in range(3)]
+        candidates = [
+            Candidate(id=f"idea:{i}", role_id="r", slot_id=f"b{i}",
+                      origin="model-example", text=statement, quality=.95)
+            for i, statement in enumerate(WORK)]
+        plan = Plan(keywords=[
+            Keyword(term="Microsoft 365 administration", weight=5),
+            Keyword(term="PowerShell", weight=5, kind="tool"),
+        ], candidates=candidates)
+        request = RunRequest(profile=profile_obj, job_description=DINSMORE,
+                             plan=plan, settings=ModelSettings(draft_mode="inspiration"))
+        ranked = selected_skills(profile_obj, plan, request.settings,
+                                 job_description=DINSMORE)
+        typesetter = Typesetter()
+        final, final_skills = _fit_reconciled_skills(
+            typesetter, profile_obj, plan, ranked, frozenset({"b0", "b1", "b2"}),
+            request)
+        self.assertTrue(final.feasible)
+        self.assertEqual(len(final.selected), 3)
+        for skill in ("Microsoft Entra ID", "Exchange Online",
+                      "SharePoint Online", "Conditional Access", "PowerShell"):
+            self.assertIn(skill, final_skills)
+        with TemporaryDirectory() as folder:
+            report = typesetter.render(final, Path(folder) / "resume.pdf")
+            self.assertTrue(report["geometry_passed"], report["issues"])
+
+    def test_generic_dedup_keeps_distinct_capabilities_and_exact_evidence(self):
+        def row(term, evidence="missing", required=False):
+            return {"term": term, "kind": "skill", "required": required,
+                    "evidence": evidence, "rationale": "Named in the role description."}
+        broad = row("Microsoft 365, Entra ID, Exchange, SharePoint administration")
+        duplicate = row("Microsoft 365 and Microsoft Entra ID services")
+        different = row("Microsoft Hyper-V virtualization and server storage")
+        found = _distinct_requirements([broad, duplicate, different])
+        self.assertEqual(len(found), 2)
+        self.assertEqual(found[-1]["term"], different["term"])
+        # Never hide direct candidate evidence or a required qualification
+        # behind an earlier broad label whose match is missing.
+        exact = row("Microsoft 365 and Microsoft Entra ID services", "exact")
+        mandatory = row("Microsoft 365 and Microsoft Entra ID services", "missing", True)
+        self.assertEqual(len(_distinct_requirements([broad, exact])), 2)
+        self.assertEqual(len(_distinct_requirements([broad, mandatory])), 2)
 
     def test_job_parser_does_not_extract_boilerplate_or_ordinary_verbs(self):
         long_job = DINSMORE + """
