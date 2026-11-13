@@ -185,7 +185,17 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if verified:
             from .wording import verified_material
             fit_plan,skills = verified_material(profile,fit_plan,skills)
-        selection = typesetter.fit(profile,fit_plan,skills,required_slots) if required_slots else typesetter.fit(profile,fit_plan,skills)
+        selection = typesetter.fit(profile,fit_plan,skills,required_slots)
+        if not selection.feasible and skills:
+            # Recover automatically if long Skills rows leave too little room
+            # for the required experience bullets. The list is relevance-
+            # ordered, so shed the least important entries first.
+            for count in range(len(skills) - 1, -1, -1):
+                trimmed = skills[:count]
+                alternative = typesetter.fit(profile,fit_plan,trimmed,required_slots)
+                if alternative.feasible:
+                    skills, selection = trimmed, alternative
+                    break
         pdf_path = directory / f"pass-{index+1}.pdf"
         report = typesetter.render(selection, pdf_path)
         progress(f"Checking text, evidence and page geometry (pass {index+1}/{rounds})")
