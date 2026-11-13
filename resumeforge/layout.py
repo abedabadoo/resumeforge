@@ -149,11 +149,20 @@ class Typesetter:
                 if candidate.role_id == role.id:
                     for item in self.bullet_blocks(candidate):
                         blocks += [item, self.gap(self.t.bullet_gap)]
-        if skills or profile.certifications or profile.interests:
-            blocks += self.heading("CERTIFICATIONS, SKILLS & INTERESTS")
-            for label, text in (("Skills:", ", ".join(skills)), ("Certifications:", profile.certifications), ("Interests:", profile.interests)):
-                if text:
-                    blocks += [self.para(text, label=label), self.gap(2)]
+        sections = [("SKILLS", "Skills:", ", ".join(skills)),
+                    ("CERTIFICATIONS", "Certifications:", profile.certifications),
+                    ("INTERESTS", "Interests:", profile.interests)]
+        visible = [(heading, label, value) for heading, label, value in sections if value]
+        if visible:
+            # Keep the section heading synchronized with the actual contents.
+            # A removed Interests line must not leave an "INTERESTS" heading.
+            names = [heading for heading, _, _ in visible]
+            title = names[0] if len(names) == 1 else (
+                " & ".join(names) if len(names) == 2 else
+                ", ".join(names[:-1]) + " & " + names[-1])
+            blocks += self.heading(title)
+            for _, label, value in visible:
+                blocks += [self.para(value, label=label), self.gap(2)]
         if profile.education:
             blocks += self.heading("EDUCATION")
             for i, education in enumerate(profile.education):
