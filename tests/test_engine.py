@@ -68,8 +68,10 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertEqual(len(result["report"]["iterations"]), 2)
         first, second = result["report"]["iterations"]
-        self.assertFalse(first["geometry_passed"])
+        self.assertTrue(first["geometry_passed"])  # safe one-page draft
+        self.assertFalse(first["full_page_passed"])  # optional aesthetic target
         self.assertTrue(second["geometry_passed"])
+        self.assertTrue(second["full_page_passed"])
         self.assertGreater(first["bottom_gap_pt"], second["bottom_gap_pt"])
         self.assertEqual(review.call_count, 2)
         self.assertIn("bottom_gap_pt", build.call_args.kwargs["feedback"])

@@ -103,6 +103,27 @@ def analyze_posting(profile, job, keywords, settings):
             target = Keyword(term=finding.capability, weight=weight, required=required,
                              rationale=rationale, kind=kind)
             row = {**_evidence_for(target, records, profile.skills, education), "terms": [target.term]}
+        # A model's natural-language capability description is rarely worded
+        # exactly like a source-resume bullet. Borrow ONLY partial, already
+        # established evidence for concrete requirements named in the same
+        # posting quote; never relabel partial experience as an exact match.
+        if row["evidence"] == "missing" and row["kind"] != "credential":
+            anchors = [
+                existing for existing in rows
+                if existing["kind"] != "credential" and existing["evidence"] != "missing"
+                and len(existing["term"]) >= 4
+                and (keyword_matches(quote, existing["term"])
+                     or keyword_matches(finding.capability, existing["term"]))
+            ]
+            if anchors:
+                anchors.sort(key=lambda existing: (
+                    existing["evidence"] == "exact",
+                    existing["required"], existing["weight"]), reverse=True)
+                best = anchors[0]
+                row["evidence"] = "related"
+                row["evidence_ids"] = best["evidence_ids"]
+                row["related_skills"] = list(dict.fromkeys(
+                    best["exact_skills"] + best["related_skills"]))
         key = _capability_key(row["term"])
         by_label.setdefault(key, row)
         if key not in by_model:

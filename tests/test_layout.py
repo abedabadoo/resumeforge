@@ -87,7 +87,7 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(first['font_sizes'], second['font_sizes'])
         self.assertEqual(first['fonts'], second['fonts'])
 
-    def test_underfill_fails_full_page_gate(self):
+    def test_underfill_remains_safe_to_export(self):
         profile = small_profile()
         renderer = Typesetter()
         selection = renderer.fit(profile, original_plan(profile), [])
@@ -96,17 +96,19 @@ class LayoutTests(unittest.TestCase):
         self.assertTrue(selection.feasible)
         self.assertTrue(report['bounds_passed'])
         self.assertFalse(report['full_page_passed'])
-        self.assertFalse(report['geometry_passed'])
+        self.assertTrue(report['geometry_passed'])
         self.assertGreater(report['bottom_gap_pt'], report['target_bottom_gap_pt'])
 
-    def test_underfill_never_produces_final_export(self):
+    def test_underfill_exports_safe_single_page_without_manual_padding(self):
         profile = small_profile()
         with tempfile.TemporaryDirectory() as work:
             directory = Path(work)
             result = run(RunRequest(profile=profile, plan=original_plan(profile)), directory)
-            self.assertEqual(result['status'], 'needs_content')
+            self.assertEqual(result['status'], 'ready')
+            self.assertTrue(result['report']['bounds_passed'])
+            self.assertFalse(result['report']['full_page_passed'])
             self.assertTrue((directory / 'preview.pdf').exists())
-            self.assertFalse((directory / 'resume.pdf').exists())
+            self.assertTrue((directory / 'resume.pdf').exists())
 
     def test_fixed_sections_overflow_never_produces_final_export(self):
         profile = small_profile()
