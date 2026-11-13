@@ -477,7 +477,12 @@ def selected_skills(profile, plan, settings, edit_request=""):
     if strict:
         literal = [s for s in direct if any(keyword_matches(s, k.term) for k in plan.keywords)]
         return list(dict.fromkeys(literal + ordered)) or direct
-    return list(dict.fromkeys(direct + ordered)) if plan.keywords else ordered or direct
+    if not plan.keywords:
+        return ordered or direct
+    # The laptop model can suggest an ordering, but it must not re-add all
+    # 26+ source skills after relevance ranking. Reserve page space for the
+    # higher-value experience and keep the strongest technical evidence.
+    return list(dict.fromkeys(direct + ordered))[:max(12, min(18, len(direct) + 2))]
 
 
 def _numbers(text: str) -> set[str]:
