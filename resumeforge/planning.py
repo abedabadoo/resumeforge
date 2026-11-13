@@ -208,7 +208,7 @@ _WORK_VERB = re.compile(
     r"automate\w*|manag\w*|buil[dt]\w*|develop\w*|design\w*|integrat\w*|test\w*|"
     r"operat\w*|monitor\w*|maintain\w*|enforc\w*|harden\w*|validat\w*|migrat\w*|"
     r"provision\w*|review\w*|troublesh\w*|remediat\w*|creat\w*|implement\w*|"
-    r"wrot\w*|administ\w*|analy[sz]\w*|run|ran|execut\w*|resolv\w*|perform\w*|reconcil\w*|inspect\w*|train\w*|teach\w*|assess\w*|prepar\w*|calculat\w*|schedul\w*|deliver\w*|evaluat\w*)\b", re.I)
+    r"wrot\w*|administ\w*|analy[sz]\w*|run|ran|execut\w*|resolv\w*|perform\w*|reconcil\w*|inspect\w*|train\w*|teach\w*|assess\w*|prepar\w*|calculat\w*|schedul\w*|deliver\w*|evaluat\w*|standardiz\w*|enhanc\w*|upgrad\w*|refactor\w*)\b", re.I)
 
 
 def _positive_use(evidence: str, term: str) -> bool:
@@ -358,7 +358,7 @@ def _asserted_text(body):
         c, re.I))
 
 
-def _evidence_for(keyword, records, skills, education=()):
+def _evidence_for(keyword, records, skills, education=(), certifications=""):
     term = keyword.term
     if keyword.kind == "credential":
         matches = [degree for degree in education if _credential_matches(degree, term)]
@@ -369,9 +369,18 @@ def _evidence_for(keyword, records, skills, education=()):
     linked = [eid for eid, body in records if eid not in exact and priorities_lib.related(body, term)]
     direct_skills = [s for s in skills if keyword_matches(s, term)]
     related_skills = [s for s in skills if s not in direct_skills and priorities_lib.related(s, term)]
-    evidence = "exact" if exact or direct_skills else "related" if linked or related_skills else "missing"
+    # Source credentials can directly satisfy an employer's request for
+    # certification vendors (e.g., "CompTIA certifications"), even if the
+    # issuer name was not typed as a "credential" by the posting parser.
+    # Keep this separate from technical Skills: a certificate mentioning a
+    # technology is not proof of hands-on expertise with that technology.
+    cert_hits = [part.strip() for part in re.split(r"[,;\n]", certifications)
+                 if part.strip() and keyword_matches(part, term)]
+    evidence = ("exact" if exact or direct_skills or cert_hits else
+                "related" if linked or related_skills else "missing")
     return {**keyword.model_dump(), "evidence": evidence, "evidence_ids": exact or linked,
-            "exact_skills": direct_skills, "related_skills": related_skills}
+            "exact_skills": direct_skills, "related_skills": related_skills,
+            "exact_certifications": cert_hits}
 
 
 def analyze_job(profile, job_description, keywords=()):
@@ -380,7 +389,8 @@ def analyze_job(profile, job_description, keywords=()):
     education = [" ".join(x for x in (item.degree, item.detail) if x) for item in profile.education]
     if profile.certifications:
         education.append(profile.certifications)
-    return [{**_evidence_for(kw, records, profile.skills, education), "terms": terms}
+    return [{**_evidence_for(kw, records, profile.skills, education,
+                             certifications=profile.certifications), "terms": terms}
             for _, kw, terms in _targets(profile, job_description, keywords)]
 
 

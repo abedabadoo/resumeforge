@@ -230,7 +230,7 @@ _HEADINGS = {
     "preferred": r"(?:preferred|desirable|desired(?:\s+skills?\s*/\s*certifications?)?|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
     "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?(?:\s*(?:&|and|/)\s*qualifications?)?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|you should have|must[- ]have(?: technical/functional skills)?|qualifications",
     "duties": r"(?:key |primary |core |essential )?(?:responsibilities|duties)|what you(?:'|’)ll do|where you(?:'|’)ll make an impact|the role|your impact",
-    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company|flexport)|how to apply|how we work|why this role is special|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
+    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity(?: employer)?|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company)|how to apply|how we work|why this role is special|physical demands|work environment|legal notices?|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
 }
 _EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
 _PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|good[- ]to[- ]have|bonus|a plus)\b", re.I)
@@ -362,26 +362,53 @@ def _listed_requirements(row):
     return result
 
 def observed_phrases(rows):
-    """Keep named products and bounded duty phrases outside the vocabulary."""
+    """Find novel named tools, not arbitrary fragments of responsibility prose.
+
+    Generic duties are already extracted independently by
+    requirement_extraction.extract(). The old object-after-verb heuristic
+    turned "manage multiple concurrent projects" into dozens of unrelated
+    fragments, while its sentence-initial capitals produced "Five", "Create",
+    "Secure", etc. Here we retain bounded nominal qualifications and unusual
+    product acronyms, with a general filter for grammar and boilerplate.
+    """
     seen = {}
     for row in rows:
-        if row.title:
+        if row.title or row.section not in {"duties", "required", "preferred"}:
             continue
-        # Product names like SnowplowDB, OASIS and OpenTelemetry.
         tokens = _listed_requirements(row)
-        # Long lists of preferred product examples and certifications are not
-        # standalone mandatory skills. Known aliases still capture real tools.
-        if row.section != "preferred" and len(row.text.split()) <= 18:
-            tokens.extend(re.findall(r"(?<![\w])(?:[A-Z][a-z]+[A-Z][a-zA-Z0-9]*|[A-Z]{3,}[A-Z0-9]{0,9})(?![\w])", row.text))
-        # A short object after a concrete duty or requirement carries more
-        # meaning than isolated bag-of-words fragments from the whole advert.
-        for match in re.finditer(
-            r"\b(?:experience (?:with|in)|proficiency in|expertise in|knowledge of|skilled in|build|design|manage|maintain|coordinate|perform|conduct|implement|oversee|prepare|apply|configure|integrate|ensure|operate)\s+"
-            r"([\w][\w /&-]{2,65}?)(?=\s+(?:and|or|for|with|to|across|that|using|such|including|while|within|in)\b|[,.;:(]|$)",row.text,re.I):
-            phrase = re.sub(r"^(?:a|an|the|our)\s+", "", match[1], flags=re.I).strip()
-            if valid_observed_phrase(phrase) and len(phrase.split()) <= 5 and len(phrase) >= 3 and not re.search(r"\b(?:experience|qualifications?|skills?|designing|building|implementing|developing|design|develop|implement|maintain|coordinate|engineer|role|candidate|solutions|capabilities|processes)\b", phrase, re.I):
-                tokens.append(phrase)
-        for text in tokens:
-            if valid_observed_phrase(text) and normalize(text) not in {"ai","cli","sd","us","it","an","the","eeo","usd","of","the role","solutions","platforms","environment","your","software","engineering","ensure","internet","knowledge","ai agents", "applicants", "gdpr", "ccpa", "li-va1", "psi", "salaries", "salary", "pay range", "are multiplied"}:
-                seen.setdefault(normalize(text), text)
+        # Novel mixed-case software names and all-caps domain acronyms may be
+        # present outside a short list. Discard ordinary initial capitals.
+        if len(row.text.split()) <= 22:
+            tokens.extend(re.findall(
+                r"(?<![\w])(?:[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+|[A-Z]{3,}[0-9]{0,5})(?![\w])",
+                row.text))
+        for term in tokens:
+            term = term.strip(" .,:;")
+            if not valid_observed_phrase(term):
+                continue
+            norm = normalize(term)
+            if norm in {
+                "ai", "cli", "usd", "eeo", "applicants", "gdpr", "ccpa",
+                "salary", "pay range", "eq", "li va1", "psi", "it",
+                "other duties", "special projects", "qualifications",
+                "skills", "experience", "responsibilities", "certifications",
+                "management", "leadership", "supervisors", "alternatively",
+                "reliable attendance", "flexibility", "scheduling",
+            }:
+                continue
+            # A normal unqualified word such as "Five" or "Create" cannot
+            # stand alone as a technology/skill. Keep invented or compound
+            # professional nouns when a source list actually contains them.
+            if len(term.split()) == 1 and not re.fullmatch(
+                    r"(?:[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+|[A-Z]{3,}[0-9]{0,5})", term):
+                # Short stand-alone preferred/required items can legitimately
+                # name an unfamiliar brand ("Preferred: Epic", "Salesforce").
+                # A lone capital at the START of a full sentence must not
+                # become a qualification ("Five years", "Create runbooks").
+                if not (row.section in {"preferred", "required"} and
+                        row.text.strip(" .,:;") == term and
+                        term[:1].isupper() and len(term) >= 4):
+                    continue
+            seen.setdefault(norm, term)
+
     return list(seen.values())
