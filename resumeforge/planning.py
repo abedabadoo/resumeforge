@@ -374,7 +374,7 @@ def _evidence_for(keyword, records, skills, education=(), certifications=""):
     # issuer name was not typed as a "credential" by the posting parser.
     # Keep this separate from technical Skills: a certificate mentioning a
     # technology is not proof of hands-on expertise with that technology.
-    cert_hits = [part.strip() for part in re.split(r"[,;\\n]", certifications)
+    cert_hits = [part.strip() for part in re.split(r"[,;\n]", certifications)
                  if part.strip() and keyword_matches(part, term)]
     evidence = ("exact" if exact or direct_skills or cert_hits else
                 "related" if linked or related_skills else "missing")
