@@ -44,9 +44,58 @@ _USAGE_NEAR_TOOL = re.compile(
     r"configured in|developed in|built in|deployed with|operated|"
     r"administered|automated|monitored|managed|migrated to|"
     r"from|tested with|wrote in)\b", re.I)
-_NAMED_WORD = re.compile(
-    r"(?<![\w])(?:[A-Z][a-z]+[A-Z][A-Za-z0-9]*|"
-    r"[A-Z][a-z]{2,}|[A-Z]{2,}(?:[/.-][A-Z0-9]+)*)(?![\w])")
+# Extract capitalized *phrases* rather than individual words. The old
+# single-word scanner could recognize "PowerShell" but lost "Exchange Online",
+# "Microsoft Entra ID", "SharePoint Online", and the general equivalent in
+# other occupations ("Google Classroom", "Epic Hyperspace", etc.).
+_NAMED_SPAN = re.compile(
+    r"(?<![\w])(?:[A-Z][A-Za-z0-9+./#-]*|[0-9]{2,4})"
+    r"(?:\s+(?:[A-Z][A-Za-z0-9+./#-]*|[0-9]{2,4}|for|of|and)){0,6}")
+_CONNECTORS = frozenset({"and", "of", "for"})
+_ACTION_WORDS = frozenset({
+    "administer", "administered", "automate", "automated", "built", "create",
+    "created", "configured", "develop", "developed", "design", "designed",
+    "deployed", "enhanced", "implemented", "improved", "integrated",
+    "maintained", "managed", "monitored", "operated", "optimized",
+    "reviewed", "standardized", "supported", "tested", "used", "using",
+    "with", "through", "by", "from", "the", "our", "your", "a", "an",
+    "required", "preferred", "experience", "knowledge", "responsibilities",
+    "qualifications", "proficiency", "ability", "strong", "technical",
+})
+
+
+def _named_technologies(posting: str) -> list[str]:
+    """Generate portable software/product phrases from a posting's spelling.
+
+    Every returned name must still be validated against actual applicant work,
+    so these are candidates, not assumed skills. We do not keep an industry or
+    employer product whitelist. Prefer longest shared phrases and never invent
+    technology names solely because a qualification asks for them.
+    """
+    proposals = []
+    for match in _NAMED_SPAN.finditer(posting):
+        words = match.group().split()
+        for length in range(min(6, len(words)), 0, -1):
+            for i in range(len(words) - length + 1):
+                part = words[i:i + length]
+                if (part[0].casefold() in _CONNECTORS | _ACTION_WORDS or
+                        part[-1].casefold() in _CONNECTORS | _ACTION_WORDS or
+                        any(p.casefold() in _ACTION_WORDS for p in part)):
+                    continue
+                term = " ".join(part)
+                if len(term) < 3 or len(term) > 70:
+                    continue
+                if length == 1:
+                    # One capitalized ordinary word isn't proof of a product.
+                    # Recognize distinctive camel-case brands, or proper
+                    # vendor/product names only with local "using ..." evidence.
+                    if term.casefold() in _NOT_TECHNOLOGIES:
+                        continue
+                elif any(p.casefold() in _CONNECTORS for p in part[1:-1]) and length < 3:
+                    continue
+                proposals.append(term)
+    proposals = sorted(dict.fromkeys(proposals), key=lambda v: (-len(v.split()), -len(v)))
+    return proposals
 _SECTION_POINTS = {"required": 140, "duties": 110, "preferred": 62, "other": 30}
 _MAX_SKILLS = 18
 
@@ -124,25 +173,37 @@ def _candidates_from_work(profile: Profile, selected: Iterable[Candidate] | None
             known.add(canonical)
 
     if selected is not None and job_description:
-        # Identify recognizable *unknown* vendor/application names without
-        # building a new industry-specific dictionary for every job.
-        for match in _NAMED_WORD.finditer(job_description):
-            name = match.group()
-            if name.casefold() in _NOT_TECHNOLOGIES or len(name) < 3:
-                continue
+        # Require BOTH source-quoted employer relevance and positively
+        # attributed use in a SELECTED accomplishment. Scanning noun chunks
+        # instead of isolated capitals retains multiword platform names.
+        # No term can be created merely from a product named in an advert.
+        from .planning import _positive_use, keyword_matches
+        for name in _named_technologies(job_description):
             identity = _identity(name)
             if identity in known:
                 continue
-            # A standalone acronym is not automatically a skill merely
-            # because it appears in compliance or legal boilerplate.
-            if name.isupper():
+            if len(name.split()) == 1 and name.isupper():
+                # Avoid advertising legal acronyms, product alternatives and
+                # certifications as hands-on Skills from punctuation alone.
                 continue
-            if any(_positive_use(text, name) and
-                   any(_USAGE_NEAR_TOOL.search(text[max(0, m.start()-65):m.start()])
-                       for m in re.finditer(r"(?<![\w])" + re.escape(name) + r"(?![\w])", text))
-                   for text in shown):
-                additions.append(name)
-                known.add(identity)
+            if not any(_positive_use(text, name) for text in shown):
+                continue
+            # The old single-word scanner also required evidence of *using*
+            # a novel brand. Keep that restriction for ordinary single words,
+            # but allow a full proper-name phrase after "administered",
+            # "standardized", "configured", etc. without a special-case verb.
+            if len(name.split()) == 1 and not any(
+                any(_USAGE_NEAR_TOOL.search(text[max(0, m.start()-65):m.start()])
+                    for m in re.finditer(r"(?<![\w])" + re.escape(name) + r"(?![\w])", text))
+                for text in shown
+            ):
+                continue
+            if any(keyword_matches(longer, name) and len(longer) > len(name)
+                   for longer in additions):
+                continue
+            additions.append(name)
+            known.add(identity)
+
     return additions
 
 
