@@ -185,66 +185,13 @@ def keyword_matches(text: str, term: str) -> bool:
 
 
 def rank_skills(profile: Profile, keywords: list[Keyword] | list[str]) -> list[str]:
-    """Rank existing skills and promote technical terms from confirmed work.
+    """Rank demonstrated capabilities, never missing job requirements.
 
-    Creating a new Skills section is a template decision. In an existing row,
-    a new label needs evidence of actual use; mere mention in a job ad, proposal
-    or a negated/hypothetical statement is insufficient.
+    Backward-compatible entry point. The specialized selectors live in
+    skills.py and can additionally use the posting and printable resume.
     """
-    clean = []
-    labels = set()
-    for skill in profile.skills:
-        key = _normalized(_canonical(skill))
-        if key and key not in labels:
-            clean.append(skill.strip())
-            labels.add(key)
-    if not clean or not keywords:
-        return clean
-    ranked_terms = [(term.term, term.weight, term.kind) if isinstance(term, Keyword)
-                    else (term, max(1, len(keywords) - index), "skill")
-                    for index, term in enumerate(keywords)]
-    priorities = [(term, weight) for term, weight, _ in ranked_terms]
-    evidence = [e.text for e in profile.evidence().values() if e.confirmed and e.role_id]
-    for term, _, kind in ranked_terms:
-        canonical = _canonical(term)
-        if (not canonical or len(canonical) > 100 or kind in ("strength", "credential")
-            or any(keyword_matches(term, strength) for strength in STRENGTHS)
-            or any(keyword_matches(skill, term) for skill in clean)):
-            continue
-        # Unknown free-text priorities are not automatically technical skills.
-        technical = (canonical in ALIASES or kind == "tool" or _normalized(term) in _TECHNICAL_SKILLS
-                     or re.fullmatch(r"[A-Z][A-Z0-9]{1,9}", term) is not None)
-        if technical and any(_positive_use(source, term) for source in evidence):
-            clean.append(canonical)
-    # Make explicit labels and adjacent capabilities comparable. Cloud-native
-    # work calls for actual cloud skills, even if the posting is vendor-neutral.
-    scored = []
-    for index, skill in enumerate(clean):
-        matches = []
-        for position, (term, weight) in enumerate(priorities):
-            # A core capability can be more relevant than an incidental exact
-            # tool match. Attenuate later priorities in long postings.
-            focus = weight / (1 + position / 10)
-            cap = priorities_lib.capability(term)
-            if keyword_matches(skill, term):
-                matches.append(focus)
-            elif cap and any(priorities_lib.literal_pattern(t).search(skill) for t in cap.phrases):
-                matches.append(focus * .95)
-            elif priorities_lib.related(skill, term):
-                matches.append(focus * .7)
-        strongest = max(matches, default=0)
-        score = strongest + min(1.2, (sum(matches) - strongest) * .24)
-        scored.append((score, index, skill))
-    if not any(score for score, _, _ in scored):
-        return clean
-    scored.sort(key=lambda item: (-item[0], item[1]))
-    relevant = [skill for score, _, skill in scored if score]
-    # Keep a compact high-signal technical core without allowing a specialized
-    # posting to delete nearly every tool the applicant already demonstrates.
-    # Keep actual technical tools such as Python, Datadog and CI/CD even
-    # when the posting focuses on a high-level cloud defense capability.
-    limit = min(len(clean), max(12, min(18, len(relevant) + 4)))
-    return [skill for _, _, skill in scored[:limit]]
+    from .skills import select_skills
+    return select_skills(profile, keywords, limit=max(18, len(profile.skills)) if not keywords else 18)
 
 
 _TECHNICAL_SKILLS = {_normalized(t) for t in DOMAINS} | {
@@ -467,22 +414,30 @@ def bullet_relevance(text, keywords):
     return total
 
 
-def selected_skills(profile, plan, settings, edit_request=""):
-    """Prioritize direct and transferable skills, then any additional model picks."""
-    direct = rank_skills(profile, plan.keywords)
-    if settings.provider == "none" or settings.strategy != "laptop":
-        return direct
-    ordered = [s for s in plan.skill_order if s in profile.skills]
-    strict = bool(re.search(r"\b(remove|exclude|omit|except)\b|\bonly (these|those|the following|list|include|show)\b", edit_request, re.I))
-    if strict:
-        literal = [s for s in direct if any(keyword_matches(s, k.term) for k in plan.keywords)]
-        return list(dict.fromkeys(literal + ordered)) or direct
-    if not plan.keywords:
-        return ordered or direct
-    # The laptop model can suggest an ordering, but it must not re-add all
-    # 26+ source skills after relevance ranking. Reserve page space for the
-    # higher-value experience and keep the strongest technical evidence.
-    return list(dict.fromkeys(direct + ordered))[:max(12, min(18, len(direct) + 2))]
+def selected_skills(profile, plan, settings, edit_request="",
+                    *, job_description="", selected=None):
+    """Reconcile skills against source, posting and actual printable bullets.
+
+    A model may propose a useful ordering, but must not force unrelated skills
+    back into the section. This is not a list of requirements that the
+    applicant lacks; every displayed label needs explicit source evidence or
+    a selected achievement that demonstrates its actual use.
+    """
+    from .skills import select_skills
+    ranked = select_skills(
+        profile, plan.keywords, job_description=job_description,
+        selected=selected, model_order=plan.skill_order)
+    if not edit_request:
+        return ranked
+    strict = bool(re.search(r"\b(remove|exclude|omit|except)\b|"
+                            r"\bonly (these|those|the following|list|include|show)\b",
+                            edit_request, re.I))
+    if strict and plan.keywords:
+        relevant = [skill for skill in ranked
+                    if any(keyword_matches(skill, term.term) for term in plan.keywords
+                           if term.kind not in ("credential", "strength"))]
+        return relevant or ranked
+    return ranked
 
 
 def _numbers(text: str) -> set[str]:
