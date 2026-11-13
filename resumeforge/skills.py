@@ -82,7 +82,7 @@ def _named_technologies(posting: str) -> list[str]:
                         part[-1].casefold() in _CONNECTORS | _ACTION_WORDS or
                         any(p.casefold() in _ACTION_WORDS for p in part)):
                     continue
-                term = " ".join(part)
+                term = " ".join(part).strip(".,;:")
                 if len(term) < 3 or len(term) > 70:
                     continue
                 if length == 1:
