@@ -392,18 +392,14 @@ def printable_plan(plan):
 
 
 def draft_skills(profile, plan, ranked):
-    if not profile.skills:
-        return ranked
-    examples = [c for c in plan.candidates if c.origin != "source"]
-    # All printable variants of a story must name a skill before it can appear
-    # in Skills. The layout enforces selecting a variant of every active story.
-    groups = {}
-    for c in examples:
-        groups.setdefault(c.slot_id, []).append(c.text)
-    extra = [k.term for k in plan.keywords if k.kind in ("skill", "tool") and
-             not any(keyword_matches(skill,k.term) for skill in ranked) and
-             any(all(keyword_matches(text,k.term) for text in variants) for variants in groups.values())]
-    return list(dict.fromkeys(extra[:4] + ranked))
+    """Keep ranked, evidenced skills; never paste an abstract job duty into Skills.
+
+    The final renderer separately reconciles terminology against the concrete
+    accomplishments it actually selects. Inserting a keyword merely because
+    it appears in *some* example alternative previously produced labels such
+    as 'case creation' while dropping Python and REST APIs.
+    """
+    return ranked
 
 
 def check_draft(profile, selected, settings):
