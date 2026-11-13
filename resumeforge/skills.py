@@ -214,5 +214,22 @@ def select_skills(profile: Profile, keywords: list[Keyword] | list[str],
                   model_order: Iterable[str] = (), limit: int = _MAX_SKILLS) -> list[str]:
     if limit < 0:
         raise ValueError("Skills limit cannot be negative")
-    return [item.label for item in choices(profile, keywords, job_description,
-                                         selected, model_order)[:limit]]
+    ranked = choices(profile, keywords, job_description, selected, model_order)
+    if not ranked or not limit:
+        return []
+    if not job_description and not keywords:
+        return [item.label for item in ranked[:limit]]
+    # Once the posting provides meaningful matches, unrelated technologies
+    # should not fill every available Skills slot merely because the profile
+    # contains them. Keep a small transferable core as a fallback, but spend
+    # the remaining space only on demonstrably relevant expertise.
+    strongest = ranked[0].score
+    if strongest >= 24:
+        minimum = min(8, len(ranked), limit)
+        cutoff = max(17.0, strongest * .16)
+        relevant = [item for item in ranked if item.score >= cutoff]
+        count = max(minimum, len(relevant))
+        return [item.label for item in ranked[:min(count, limit)]]
+    # When no requirements are recognizable, preserve the source order rather
+    # than pretending the application can confidently rank unseen domains.
+    return [item.label for item in ranked[:min(limit, max(8, len(profile.skills)))]]
