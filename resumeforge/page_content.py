@@ -20,6 +20,11 @@ def sourced_summary(profile: Profile, plan: Plan, selected: list[Candidate]) -> 
         if keyword.kind in ("credential", "strength"):
             continue
         term = keyword.term.strip(" .,;:-")
+        # An OR requirement lists acceptable alternatives, not expertise the
+        # applicant has in *every* branch (e.g., red team OR SOC). Never
+        # reproduce the entire list as a claimed professional specialty.
+        if " or " in term.casefold() or "," in term:
+            continue
         if not 2 <= len(term.split()) <= 6 or len(term) > 44:
             continue
         if not (keyword_matches(evidence, term)
