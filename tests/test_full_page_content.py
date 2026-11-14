@@ -135,6 +135,17 @@ class PageRefinementTests(unittest.TestCase):
             self.assertTrue((Path(folder) / "preview.pdf").exists())
         self.assertTrue(ask.called)
 
+    def test_model_response_review_matches_existing_ai_tool_evaluation(self):
+        priorities = [
+            Keyword(term="Evaluate model responses for correctness and subtle failure modes", weight=5),
+            Keyword(term="Incident response", weight=5),
+        ]
+        evaluated = ("Brought AI into the workflow, built an LLM-powered assistant "
+                     "and evaluated 11 AI code-review tools.")
+        compliance = "Led an ISO 27001 audit of access controls and reported compliance findings."
+        self.assertGreater(bullet_relevance(evaluated, priorities),
+                           bullet_relevance(compliance, priorities))
+
     def test_relevance_recognizes_independent_work_concepts(self):
         priorities = [
             Keyword(term="Evaluate AI model responses and identify failure modes", weight=5),
