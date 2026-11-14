@@ -55,7 +55,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "GitHub Copilot": ("GitHub Copilot",),
     "Google Cloud": ("Google Cloud", "Google Cloud Platform", "GCP"),
     "Terraform": ("Terraform",), "Prometheus": ("Prometheus",),
-    "Grafana": ("Grafana",), "Kubernetes": ("Kubernetes", "K8s"),
+    "Grafana": ("Grafana",), "Kubernetes": ("Kubernetes", "K8s", "GKE", "Google Kubernetes Engine"),
     "Docker": ("Docker",), "Python": ("Python",),
     "Java": ("Java",), "JavaScript": ("JavaScript", "ECMAScript"),
     "TypeScript": ("TypeScript",), "C++": ("C++",), "C#": ("C#",),
@@ -506,6 +506,27 @@ def bullet_relevance(text, keywords):
             if overlap >= .25:
                 total += kw.weight * min(.36, overlap * .55) * focus
     return total
+
+
+def bullet_order_priority(text, keywords):
+    """Earliest job priority demonstrated by a named technical competency.
+
+    Use the same existing alias vocabulary as keyword matching. This affects
+    display order ONLY; the measured selector still chooses the same bullet
+    variants and decides which accomplishments fit the fixed page.
+    Broad shared words such as "security" and "management" cannot promote a
+    bullet above a more explicit platform or tool match.
+    """
+    technologies = (name for name in ALIASES if name not in {"Go", "Git"})
+    # Materialize once; generators would be exhausted on the first priority.
+    technologies = tuple(technologies)
+    for position, requirement in enumerate(keywords[:8]):
+        if requirement.kind == "credential":
+            continue
+        if any(keyword_matches(requirement.term, name) and keyword_matches(text, name)
+               for name in technologies):
+            return position
+    return len(keywords)
 
 
 def selected_skills(profile, plan, settings, edit_request="",
