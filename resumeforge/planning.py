@@ -479,7 +479,7 @@ def bullet_relevance(text, keywords):
             # Domain-general semantic transfer only receives PARTIAL credit.
             # Exact required product names still need their exact evidence.
             overlap = capability_overlap(text, kw.term)
-            if overlap >= .3:
+            if overlap >= .25:
                 total += kw.weight * min(.36, overlap * .55) * focus
     return total
 
