@@ -20,7 +20,8 @@ def merge_plans(old: Plan, new: Plan) -> Plan:
     candidates.update({c.id: c for c in new.candidates})
     claims = {p.id: p for p in old.proposed_claims}
     claims.update({p.id: p for p in new.proposed_claims})
-    return Plan(skill_order=new.skill_order or old.skill_order,keywords=new.keywords or old.keywords, candidates=list(candidates.values()),
+    return Plan(summary=new.summary or old.summary,
+                skill_order=new.skill_order or old.skill_order,keywords=new.keywords or old.keywords, candidates=list(candidates.values()),
                 proposed_claims=list(claims.values()), notes=list(dict.fromkeys(old.notes+new.notes)))
 
 
@@ -157,6 +158,22 @@ def _fit_reconciled_skills(typesetter, profile, plan, initial_skills, required_s
             if any(_identity(s) not in permitted for s in skills):
                 skills = [s for s in skills if _identity(s) in permitted]
                 chosen, skills = fit_bounded(skills)
+    # A short professional summary is a real, evidence-backed content
+    # section. Try it only when the page has substantially more than a line
+    # of white space, other bullet/skill variants are insufficient, and its
+    # measured height stays inside the locked one-page template.
+    if (chosen.feasible and not plan.summary
+            and chosen.bottom_gap > typesetter.t.bottom_tolerance + 23
+            and request.job_description.strip()
+            and request.settings.provider != "none" and not verified):
+        from .page_content import sourced_summary
+        sentence = sourced_summary(profile, plan, chosen.selected)
+        if sentence:
+            trial_plan = plan.model_copy(update={"summary": sentence})
+            trial = typesetter.fit(profile, trial_plan, skills, required_slots)
+            if trial.feasible and 0 <= trial.bottom_gap < chosen.bottom_gap - 2:
+                plan.summary = sentence
+                chosen = trial
     return chosen, skills
 
 
@@ -293,6 +310,8 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         selection, skills = _fit_reconciled_skills(
             typesetter, profile, fit_plan, skills, required_slots, request,
             verified=verified)
+        if fit_plan.summary and not plan.summary:
+            plan.summary = fit_plan.summary
         pdf_path = directory / f"pass-{index+1}.pdf"
         report = typesetter.render(selection, pdf_path)
         progress(f"Checking text, evidence and page geometry (pass {index+1}/{rounds})")
@@ -322,6 +341,7 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if inspiration:
             report["semantic_review"] = "Source evidence checked separately from example wording"
         report["skills"] = skills
+        report["professional_summary"] = fit_plan.summary
         report["confirmed_claim_ids"] = sorted(confirmations)
         from .planning import keyword_coverage
         report["keyword_coverage"] = keyword_coverage(plan.keywords, selection.selected, skills)
