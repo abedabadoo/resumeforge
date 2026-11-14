@@ -249,7 +249,7 @@ def passages(job):
             continue
         # Employer-specific About headings are company information, not
         # qualifications. "About the role" remains a duties heading.
-        if re.fullmatch(r"about\s+(?!the\s+(?:job|role|position)\b|this\s+(?:job|role|position)\b)(?:[\w&.'-]+\s*){1,4}", line, re.I):
+        if re.fullmatch(r"about\s+(?!the\s+(?:job|role|position)\b|this\s+(?:job|role|position)\b)(?:[\w&.'-]+\s*){1,4}", line.rstrip(" :–—-"), re.I):
             section = "ignore"
             continue
         # Standalone recruiting markers are not required skills.
