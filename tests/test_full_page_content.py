@@ -19,6 +19,7 @@ from resumeforge.job_analysis import Reading, Requirement, analyze_posting, _con
 from resumeforge.layout import Typesetter
 from resumeforge.models import Bullet, Candidate, Keyword, ModelSettings, Plan, Profile, Review, Role, RunRequest, Template
 from resumeforge.planning import bullet_relevance
+from resumeforge.page_content import sourced_summary
 from resumeforge.requirement_extraction import extract, without_experience_duration
 from resumeforge.priorities import passages
 
@@ -87,6 +88,33 @@ class PageRefinementTests(unittest.TestCase):
         self.assertEqual(before["font_sizes"], after["font_sizes"])
         self.assertEqual(before["fonts"], after["fonts"])
         self.assertTrue(after["bounds_passed"])
+
+    def test_summary_option_uses_selected_evidence_and_real_content(self):
+        p = small_profile()
+        p.roles[0].bullets[1].text = "Built incident response playbooks and documented security escalation."
+        plan = source_plan(p)
+        plan.keywords = [
+            Keyword(term="AI code review", weight=5),
+            Keyword(term="incident response", weight=5)]
+        selection = Typesetter().fit(p, plan, p.skills)
+        summary = sourced_summary(p, plan, selection.selected)
+        self.assertIn("AI code review", summary)
+        self.assertIn("incident response", summary)
+        enhanced = plan.model_copy(update={"summary": summary})
+        original = Typesetter().fit(p, plan, p.skills)
+        with_summary = Typesetter().fit(p, enhanced, p.skills)
+        self.assertGreater(with_summary.used_height, original.used_height)
+        self.assertLess(with_summary.bottom_gap, original.bottom_gap)
+        self.assertEqual(Template().body_size, 12)
+        self.assertEqual(Template().leading, 13.2)
+
+    def test_summary_never_promotes_missing_job_requirements(self):
+        p = small_profile()
+        plan = source_plan(p)
+        plan.keywords = [
+            Keyword(term="Kubernetes cluster administration", weight=5),
+            Keyword(term="Oracle database replication", weight=5)]
+        self.assertEqual(sourced_summary(p, plan, plan.candidates), "")
 
     @patch("resumeforge.example_refit.ask", return_value=Stories(bullets=[
         Story(slot=1, concise="Too few words for a resume", detailed="Still not enough words for a bullet")]))
