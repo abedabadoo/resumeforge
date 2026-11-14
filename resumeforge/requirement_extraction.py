@@ -78,8 +78,8 @@ class Extracted:
 
 def _focused_phrases(sentence: str) -> list[str]:
     """Extract action objects or qualification objects, never isolated tokens."""
-    clause = sentence.strip(" .:;,*")
-    clause = without_experience_duration(clause)
+    original = sentence.strip(" .:;,*")
+    clause = without_experience_duration(original)
     if _NON_REQUIREMENT.search(clause):
         return []
     qualification = _QUALIFICATION.match(clause)
@@ -88,7 +88,7 @@ def _focused_phrases(sentence: str) -> list[str]:
         # Tenure-prefixed requirements have already had their quantity and
         # generic 'years of experience in' wrapper stripped above.
         # Their remaining content is a qualification, not a sentence verb.
-        if without_experience_duration(sentence.strip(" .:;,*")) == clause:
+        if clause == original:
             return []
         qualification = True
     else:
