@@ -107,6 +107,9 @@ class Proposal(Model):
 
 
 class Plan(Model):
+    # Optional evidence-backed professional summary generated only when it
+    # contributes useful content to a sparse, job-targeted one-page resume.
+    summary: str = Field(default="", max_length=220)
     skill_order: list[str] = Field(default_factory=list, max_length=120)
     keywords: list[Keyword] = Field(default_factory=list)
     candidates: list[Candidate] = Field(default_factory=list)
