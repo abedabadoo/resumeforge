@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         self._dirty = True
         self.export_button.setEnabled(bool(self._can_export()))
         labels = {"ready": "Checks passed. Review the PDF before submitting.",
-                  "needs_content": "More content or different wording is needed to fit the page.",
+                  "needs_content": "Automatic page-fill refinement could not reach the fixed one-page target. See the checks.",
                   "needs_review": "Content needs review. See Changes and checks."}
         status = labels.get(result["status"], "Review the checks.")
         generated = f"   •   {len(bullets)} generated example bullet{'s' if len(bullets) != 1 else ''}" if bullets else ""
