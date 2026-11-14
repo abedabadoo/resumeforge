@@ -402,6 +402,60 @@ def keyword_coverage(keywords, bullets, skills):
         "details": details, "description": "Exact labels and related skills in the rendered resume. These are editorial matches, not an ATS score."}
 
 
+_CAPABILITY_STOPWORDS = frozenset({
+    "the", "and", "for", "with", "from", "into", "that", "this", "their",
+    "those", "using", "across", "including", "through", "support", "work",
+    "years", "experience", "required", "skills", "knowledge", "strong",
+    "tools", "system", "systems", "platform", "platforms", "operations",
+    "capabilities", "capability", "development", "management",
+})
+
+
+def _concept_tokens(text: str) -> set[str]:
+    """Small occupation-neutral lemmatizer for transferable work concepts."""
+    tokens = set()
+    for raw in re.findall(r"[a-z][a-z0-9+-]*", text.casefold()):
+        # AI, LLMs and model responses are related conceptual objects, not
+        # literal aliases for any named tool. The connection counts only as
+        # partial evidence when another meaningful action also overlaps.
+        if raw in {"ai", "ml", "llm", "model", "models"}:
+            tokens.add("ai-model")
+            continue
+        if raw in {"api", "soc"}:
+            tokens.add(raw)
+            continue
+        if raw in _CAPABILITY_STOPWORDS or len(raw) < 3:
+            continue
+        token = re.sub(r"(?:ization|isations|ation|ions|ing|ed|es|s)$", "", raw)
+        if len(token) < 3:
+            token = raw
+        for variants in (
+            {"evaluat", "evaluate", "evalu", "assess", "review", "validat", "test"},
+            {"investigat", "analyz", "analys", "diagnos"},
+            {"document", "writ", "explain", "report"},
+            {"develop", "build", "implement", "engineer", "creat"},
+            {"automat", "automate", "scripting", "script"},
+            {"mitigat", "remediat", "contain", "resolv"},
+        ):
+            if any(token.startswith(x) for x in variants):
+                token = sorted(variants)[0]
+                break
+        tokens.add(token)
+    return tokens
+
+
+def capability_overlap(text: str, requirement: str) -> float:
+    """Credit related *demonstrated* work when phrasing isn't verbatim.
+
+    This does not claim an exact qualification, and sharing a single generic
+    noun is insufficient. Every overlap is grounded in both source strings.
+    """
+    left, right = _concept_tokens(text), _concept_tokens(requirement)
+    if not right or len(left & right) < 2:
+        return 0.0
+    return len(left & right) / len(right)
+
+
 def bullet_relevance(text, keywords):
     """Credit actual capability matches and discount transferable evidence."""
     # Reward the highest-ranked distinct requirements rather than every
@@ -421,6 +475,12 @@ def bullet_relevance(text, keywords):
             total += kw.weight * focus
         elif priorities_lib.related(text, kw.term):
             total += kw.weight * .32 * focus
+        else:
+            # Domain-general semantic transfer only receives PARTIAL credit.
+            # Exact required product names still need their exact evidence.
+            overlap = capability_overlap(text, kw.term)
+            if overlap >= .25:
+                total += kw.weight * min(.36, overlap * .55) * focus
     return total
 
 

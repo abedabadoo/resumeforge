@@ -20,7 +20,8 @@ def merge_plans(old: Plan, new: Plan) -> Plan:
     candidates.update({c.id: c for c in new.candidates})
     claims = {p.id: p for p in old.proposed_claims}
     claims.update({p.id: p for p in new.proposed_claims})
-    return Plan(skill_order=new.skill_order or old.skill_order,keywords=new.keywords or old.keywords, candidates=list(candidates.values()),
+    return Plan(summary=new.summary or old.summary,
+                skill_order=new.skill_order or old.skill_order,keywords=new.keywords or old.keywords, candidates=list(candidates.values()),
                 proposed_claims=list(claims.values()), notes=list(dict.fromkeys(old.notes+new.notes)))
 
 
@@ -107,6 +108,75 @@ def _fit_reconciled_skills(typesetter, profile, plan, initial_skills, required_s
     if any(_identity(skill) not in permitted for skill in skills):
         reduced = [skill for skill in skills if _identity(skill) in permitted]
         chosen, skills = fit_bounded(reduced)
+    # Search discrete, evidence-backed Skills allocations after the bullet
+    # selector stabilizes. A different number of relevant skills changes the
+    # measured number of wrapped lines; no font, tracking, spacing, or margins
+    # are altered. This also helps when one otherwise strong set leaves a
+    # large empty band at the bottom of the page.
+    if request.job_description.strip() and chosen.feasible:
+        from .skills import choices, _identity
+        supported = choices(profile, plan.keywords, request.job_description,
+                            selected=chosen.selected, model_order=plan.skill_order)
+        if verified:
+            original_ids = {_identity(x) for x in profile.skills}
+            supported = [c for c in supported if _identity(c.label) in original_ids]
+        if supported:
+            # Do not fill page space with low-value unrelated skills simply
+            # because a technology appears somewhere in the original resume.
+            cutoff = max(12.0, supported[0].score * .19)
+            best = (chosen, skills)
+            def fill_value(pair):
+                fit, labels = pair
+                if not fit.feasible:
+                    return (-1, float("-inf"))
+                remaining = max(0, fit.bottom_gap - typesetter.t.bottom_tolerance)
+                # First minimize unfilled points; use role evidence and stronger
+                # skill scores to break ties, not visual spacing tricks.
+                usefulness = sum(c.score for c in supported
+                                 if _identity(c.label) in {_identity(s) for s in labels})
+                return (-remaining, usefulness)
+            base_count = len(skills)
+            counts = set(range(max(0, base_count - 4),
+                               min(18, len(supported), base_count + 5) + 1))
+            counts.add(base_count)
+            for count in sorted(counts):
+                options = [c.label for c in supported[:count]
+                           if c.score >= cutoff or count <= 7]
+                if len(options) == len(skills) and options == skills:
+                    continue
+                alternative = typesetter.fit(profile, plan, options, required_slots)
+                if (alternative.feasible
+                        and len(alternative.selected) >= len(best[0].selected)
+                        and fill_value((alternative, options)) > fill_value(best)):
+                    best = (alternative, options)
+            chosen, skills = best
+            eligible = selected_skills(
+                profile, plan, request.settings, request.edit_request,
+                job_description=request.job_description, selected=chosen.selected)
+            permitted = {_identity(s) for s in eligible}
+            # Extended labels must be independently sourced. Allow additional
+            # highly scored original skills without bypassing provenance.
+            permitted.update(_identity(c.label) for c in supported if c.source == "source")
+            if any(_identity(s) not in permitted for s in skills):
+                skills = [s for s in skills if _identity(s) in permitted]
+                chosen, skills = fit_bounded(skills)
+    # A short professional summary is a real, evidence-backed content
+    # section. Try it only when the page has substantially more than a line
+    # of white space, other bullet/skill variants are insufficient, and its
+    # measured height stays inside the locked one-page template.
+    if (chosen.feasible and not plan.summary
+            and chosen.bottom_gap > typesetter.t.bottom_tolerance + 23
+            and request.job_description.strip()
+            and request.settings.provider != "none" and not verified):
+        from .page_content import sourced_summary
+        sentence = sourced_summary(profile, plan, chosen.selected)
+        if sentence:
+            trial_plan = plan.model_copy(update={"summary": sentence})
+            trial = typesetter.fit(profile, trial_plan, skills, required_slots)
+            if (trial.feasible and len(trial.selected) >= len(chosen.selected)
+                    and 0 <= trial.bottom_gap < chosen.bottom_gap - 2):
+                plan.summary = sentence
+                chosen = trial
     return chosen, skills
 
 
@@ -243,6 +313,8 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         selection, skills = _fit_reconciled_skills(
             typesetter, profile, fit_plan, skills, required_slots, request,
             verified=verified)
+        if fit_plan.summary and not plan.summary:
+            plan.summary = fit_plan.summary
         pdf_path = directory / f"pass-{index+1}.pdf"
         report = typesetter.render(selection, pdf_path)
         progress(f"Checking text, evidence and page geometry (pass {index+1}/{rounds})")
@@ -272,6 +344,7 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
         if inspiration:
             report["semantic_review"] = "Source evidence checked separately from example wording"
         report["skills"] = skills
+        report["professional_summary"] = fit_plan.summary
         report["confirmed_claim_ids"] = sorted(confirmations)
         from .planning import keyword_coverage
         report["keyword_coverage"] = keyword_coverage(plan.keywords, selection.selected, skills)
@@ -322,7 +395,22 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
     report["unattended_submission_qualified"] = False
     from .planning import CALLS
     report["inference_calls"]=list(CALLS.get() or [])
-    status = "ready" if report["geometry_passed"] and report["quality_review"]["passed"] else "needs_content" if not report["geometry_passed"] else "needs_review"
+    # A targeted, model-powered run must finish the visual page-fill brief,
+    # not silently export a four-line white band as if it were intentional.
+    # Keep a safe one-page draft viewable for diagnosis when no suitable
+    # grounded content combination can be found. Untargeted/source-only runs
+    # remain exportable because no model is available to create refinements.
+    full_required = bool(request.job_description.strip()) and (
+        request.settings.provider != "none" and not verified)
+    report["full_page_required"] = full_required
+    if report["geometry_passed"] and report["quality_review"]["passed"]:
+        status = "ready" if (not full_required or report["full_page_passed"]) else "needs_content"
+        if status == "needs_content":
+            report["warnings"].append(
+                "Automatic content refinement exhausted its measured alternatives without "
+                "meeting the fixed one-page fill target. The preview is not a finished export.")
+    else:
+        status = "needs_content" if not report["geometry_passed"] else "needs_review"
     shutil.copyfile(pdf_path, directory/"preview.pdf")
     if status == "ready":
         shutil.copyfile(pdf_path, directory/"resume.pdf")

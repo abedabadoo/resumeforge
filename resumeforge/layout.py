@@ -137,9 +137,15 @@ class Typesetter:
         return [self.para(s,indent=self.t.bullet_indent,kind="bullet",role_id=c.role_id,candidate_id=c.id)
                 for s in (c.parts or [c.text])]
 
-    def blocks(self, profile: Profile, selected: list[Candidate], skills: list[str]) -> list[Block]:
+    def blocks(self, profile: Profile, selected: list[Candidate], skills: list[str],
+               summary: str = "") -> list[Block]:
         blocks = [self.para(profile.name, bold=True, size=self.t.name_size, leading=self.t.name_size * 1.1, center=True),
                   self.gap(4), self.para(profile.contact, center=True)]
+        if summary:
+            # Real content, not a spacing adjustment. This section is omitted
+            # unless the optimizer can support and fit its actual statement.
+            blocks += self.heading("PROFESSIONAL SUMMARY")
+            blocks += [self.para(summary), self.gap(2)]
         blocks += self.heading("PROFESSIONAL EXPERIENCE")
         for index, role in enumerate(profile.roles):
             if index:
@@ -172,12 +178,12 @@ class Typesetter:
         return blocks
 
     def fit(self, profile: Profile, plan: Plan, skills: list[str], required_slots=frozenset(), *, drop_interests=True) -> Selection:
-        from .planning import bullet_relevance
+        from .planning import bullet_relevance, keyword_matches, capability_overlap
         # In a tailored application, give relevant evidence page space before
         # nonessential hobbies. Keep the source profile unchanged.
         if drop_interests and plan.keywords and profile.interests:
             profile = profile.model_copy(update={"interests": ""})
-        fixed_blocks = self.blocks(profile, [], skills)
+        fixed_blocks = self.blocks(profile, [], skills, plan.summary)
         fixed = sum(b.height for b in fixed_blocks)
         # Font descenders can extend beyond a Paragraph's nominal line box.
         # Account for the final visible line before choosing a candidate set.
@@ -197,32 +203,45 @@ class Typesetter:
             ink_offset = self.t.body_size-self.t.leading-pdfmetrics.getDescent("RF",self.t.body_size)-self.t.bullet_gap
         capacity = math.floor((self.available - fixed - max(0,ink_offset)) * 100)
         if capacity <= 0:
-            return Selection([], self.blocks(profile, [], skills), fixed, self.available-fixed, False,
+            return Selection([], self.blocks(profile, [], skills, plan.summary), fixed, self.available-fixed, False,
                              ["Fixed sections alone exceed one page. Edit the profile or choose another template."])
         # Each state is height in hundredths of a point -> utility and selections.
-        states: dict[int, tuple[float, list[Candidate]]] = {0: (0.0, [])}
+        # Track top-requirement coverage in the same discrete layout search.
+        # A third redundant compliance bullet should earn less incremental
+        # value than the first bullet proving AI evaluation or incident work.
+        coverage_keys = [k for k in plan.keywords if k.kind != "credential"][:12]
+        states: dict[int, tuple[float, list[Candidate], int]] = {0: (0.0, [], 0)}
         for role in profile.roles:
             role_candidates = [c for c in plan.candidates if c.role_id == role.id and not c.needs_confirmation]
             slots: dict[str, list[Candidate]] = {}
             for c in role_candidates:
                 slots.setdefault(c.slot_id, []).append(c)
             required = min(self.t.min_bullets_per_role, len(role.bullets))
-            local: dict[tuple[int, int], tuple[float, list[Candidate]]] = {(h, 0): v for h, v in states.items()}
+            local: dict[tuple[int, int], tuple[float, list[Candidate], int]] = {(h, 0): v for h, v in states.items()}
             for slot, variants in slots.items():
                 options = []
                 for c in variants:
                     h = round(sum(b.height+self.t.bullet_gap for b in self.bullet_blocks(c))*100)
                     relevance = bullet_relevance(c.text, plan.keywords)
                     utility = 12 * c.quality + min(24, relevance * 1.8) + (1 if c.id.startswith("original:") else 0)
-                    options.append((h, utility, c))
+                    mask = 0
+                    for i, k in enumerate(coverage_keys):
+                        if (keyword_matches(c.text, k.term)
+                                or (capability_overlap(c.text, k.term) >= .25)):
+                            mask |= 1 << i
+                    options.append((h, utility, c, mask))
                 # A required editorial target cannot disappear to make its page fit.
                 updated = {} if slot in required_slots else dict(local)
-                for (used, count), (score, selected) in local.items():
-                    for height, utility, c in options:
+                for (used, count), (score, selected, covered) in local.items():
+                    for height, utility, c, mask in options:
                         if used + height > capacity:
                             continue
                         key = (used + height, min(required, count + 1))
-                        value = (score + utility, selected + [c])
+                        new_mask = mask & ~covered
+                        diversity = sum(max(1.0, 6.0 - 0.35 * i)
+                                        for i in range(len(coverage_keys))
+                                        if new_mask & (1 << i))
+                        value = (score + utility + diversity, selected + [c], covered | mask)
                         if key not in updated or value[0] > updated[key][0]:
                             updated[key] = value
                 local = updated
@@ -231,7 +250,7 @@ class Typesetter:
                 if count == required and (height not in states or value[0] > states[height][0]):
                     states[height] = value
             if not states:
-                return Selection([], self.blocks(profile, [], skills), fixed, self.available-fixed, False,
+                return Selection([], self.blocks(profile, [], skills, plan.summary), fixed, self.available-fixed, False,
                                  ["No one-page combination retains the minimum bullets per role. Shorter grounded alternatives are needed."])
         target = math.floor((self.t.bottom_tolerance-abs(ink_offset)) * 100)
         fitting = {h:v for h,v in states.items() if capacity-h <= target}
@@ -250,7 +269,7 @@ class Typesetter:
             selected = sorted(selected, key=lambda c: (
                 positions.get(c.role_id, len(positions)),
                 -bullet_relevance(c.text, plan.keywords)))
-        blocks = self.blocks(profile, selected, skills)
+        blocks = self.blocks(profile, selected, skills, plan.summary)
         used = sum(b.height for b in blocks)
         warnings = [] if fitting else ["Some page space remains; the best available content was selected automatically. This is not an export error."]
         return Selection(selected, blocks, used, self.available-used, True, warnings)

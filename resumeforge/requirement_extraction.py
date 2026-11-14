@@ -36,6 +36,32 @@ _NON_REQUIREMENT = re.compile(
     r"^(?:we |our |this role |you(?:'ll| will) (?:enjoy|love|benefit)|"
     r"about |company |team |salary |pay |benefits?|equal opportunity|"
     r"limited sponsorship|must be legally authorized)\b", re.I)
+_EXPERIENCE_DURATION = re.compile(
+    r"^(?:(?:at least|minimum of|more than|over)\s+)?"
+    r"(?:\d+(?:\+)?|one|two|three|four|five|six|seven|eight|nine|ten)"
+    r"(?:\s*(?:\+|or more))?\s+years?(?:\s+of)?\s+"
+    r"(?:(?:professional|practical|relevant|related|hands.on|direct|prior)\s+)?"
+    r"(?:experience|work)(?:\s+(?:in|with|of|using))?\s+",
+    re.I)
+_EXPERIENCE_SIMPLE = re.compile(
+    r"^(?:(?:at least|minimum of|more than|over)\s+)?\d+\+?\s+years?\s+"
+    r"(?:in|with|supporting|developing|building|of)\s+", re.I)
+
+
+def without_experience_duration(text: str) -> str:
+    """Keep the requested domain; remove numerical tenure from keyword analysis.
+
+    Duration may matter to an employer's separate eligibility process, but is
+    not a skill and must not displace actual experience areas on a resume.
+    """
+    text = text.strip()
+    for pattern in (_EXPERIENCE_DURATION, _EXPERIENCE_SIMPLE):
+        match = pattern.match(text)
+        if match:
+            return text[match.end():].strip(" .,:;-")
+    return text
+
+
 _GENERIC = frozenset((
     "work", "working", "skills", "tools", "people", "teams", "the team",
     "customers", "software", "experience", "solutions", "a platform",
@@ -52,14 +78,21 @@ class Extracted:
 
 def _focused_phrases(sentence: str) -> list[str]:
     """Extract action objects or qualification objects, never isolated tokens."""
-    clause = sentence.strip(" .:;,*")
+    original = sentence.strip(" .:;,*")
+    clause = without_experience_duration(original)
     if _NON_REQUIREMENT.search(clause):
         return []
     qualification = _QUALIFICATION.match(clause)
     action = _ACTION.match(clause)
     if not (qualification or action):
-        return []
-    clause = clause[(qualification or action).end():].strip(" ,:;")
+        # Tenure-prefixed requirements have already had their quantity and
+        # generic 'years of experience in' wrapper stripped above.
+        # Their remaining content is a qualification, not a sentence verb.
+        if clause == original:
+            return []
+        qualification = True
+    else:
+        clause = clause[(qualification or action).end():].strip(" ,:;")
     # For "Design, build, and manage X" remove coordination verbs but keep X.
     for _ in range(4):
         before = clause

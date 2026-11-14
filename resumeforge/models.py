@@ -107,6 +107,9 @@ class Proposal(Model):
 
 
 class Plan(Model):
+    # Optional evidence-backed professional summary generated only when it
+    # contributes useful content to a sparse, job-targeted one-page resume.
+    summary: str = Field(default="", max_length=220)
     skill_order: list[str] = Field(default_factory=list, max_length=120)
     keywords: list[Keyword] = Field(default_factory=list)
     candidates: list[Candidate] = Field(default_factory=list)
@@ -123,7 +126,7 @@ class ModelSettings(Model):
     model: str = ""
     api_key_env: str = "RESUMEFORGE_API_KEY"
     timeout_seconds: int = Field(default=180, ge=10, le=900)
-    max_rounds: int = Field(default=3, ge=1, le=5)
+    max_rounds: int = Field(default=5, ge=1, le=5)
 
 
 class Template(Model):
