@@ -59,29 +59,44 @@ def refit_examples(request, plan, selection, report, review):
               "bullets elsewhere on the page. The longer alternatives should collectively contribute "
               "about needed_lines extra wrapped text lines, but don't artificially elongate every bullet. "
               "Keep all existing numbers exactly; use natural prose without placeholders or labels.")
-    try:
-        variants = ask(request.settings, Stories, prompt, payload, 1600)
-    except (RuntimeError, OSError) as exc:
-        plan.notes.append(f"Could not refine example wording: {exc}")
-        return False
     added = []
-    for story in variants.bullets:
-        if not 1 <= story.slot <= len(editable):
-            continue
-        alternatives = editable[story.slot - 1]
-        base = chosen.get(alternatives[0].slot_id, alternatives[0])
-        metrics = set(re.findall(r"\d+(?:[.,]\d+)*%?", base.text))
-        seen = {c.text.casefold() for c in plan.candidates + added}
-        for text in (story.concise, story.detailed):
-            if (not printable(text) or text.casefold() in seen or
-                    not set(re.findall(r"\d+(?:[.,]\d+)*%?", text)) == metrics or
-                    (base.keywords and not any(keyword_matches(text, term) for term in base.keywords))):
+    # A small local model can occasionally produce a superficially valid
+    # response that fails the semantic/metric constraints. Try once more with
+    # explicit feedback rather than immediately abandoning the page-fill
+    # target after the first unusable response.
+    for attempt in range(2):
+        try:
+            variants = ask(request.settings, Stories, prompt, payload, 1600)
+        except (RuntimeError, OSError) as exc:
+            plan.notes.append(f"Could not refine example wording: {exc}")
+            return False
+        for story in variants.bullets:
+            if not 1 <= story.slot <= len(editable):
                 continue
-            digest = hashlib.sha256((base.slot_id + "\0" + text).encode()).hexdigest()[:18]
-            added.append(base.model_copy(update={"id": "idea:" + digest, "text": text, "origin": "model-example",
-                         "rationale": "Measured full-page content refinement based on the selected accomplishment.",
-                         "evidence_ids": [], "parts": [],
-                         "keywords": [k.term for k in plan.keywords if keyword_matches(text, k.term)]}))
-            seen.add(text.casefold())
+            alternatives = editable[story.slot - 1]
+            base = chosen.get(alternatives[0].slot_id, alternatives[0])
+            metrics = set(re.findall(r"\d+(?:[.,]\d+)*%?", base.text))
+            seen = {c.text.casefold() for c in plan.candidates + added}
+            for text in (story.concise, story.detailed):
+                new_metrics = set(re.findall(r"\d+(?:[.,]\d+)*%?", text))
+                if (not printable(text) or text.casefold() in seen or
+                        new_metrics != metrics or
+                        (base.keywords and not any(keyword_matches(text, term) for term in base.keywords))):
+                    continue
+                digest = hashlib.sha256((base.slot_id + "\0" + text).encode()).hexdigest()[:18]
+                added.append(base.model_copy(update={
+                    "id": "idea:" + digest, "text": text, "origin": "model-example",
+                    "rationale": "Measured full-page content refinement based on the selected accomplishment.",
+                    "evidence_ids": [], "parts": [],
+                    "keywords": [k.term for k in plan.keywords if keyword_matches(text, k.term)]}))
+                seen.add(text.casefold())
+        if added:
+            break
+        payload["retry_note"] = ("Your previous suggestion could not be used: it either omitted "
+                                 "existing numbers, added new numbers, did not describe the "
+                                 "same accomplishment, or duplicated existing wording. "
+                                 "Return shorter and longer complete versions without changing "
+                                 "the original metrics.")
+
     plan.candidates.extend(added)
     return bool(added)
