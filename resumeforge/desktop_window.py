@@ -426,6 +426,8 @@ class MainWindow(QMainWindow):
                 lines.append("Skills: " + ", ".join(item["exact_skills"]))
             if item.get("related_skills"):
                 lines.append("Related skills: " + ", ".join(item["related_skills"]))
+            if item.get("role_matches"):
+                lines.append("Relevant employment titles (tenure not verified): " + "; ".join(item["role_matches"]))
             if item.get("exact_education"):
                 lines.append("Education/certifications: " + ", ".join(item["exact_education"]))
             excerpt = next((sources[key].text for key in item.get("evidence_ids", []) if key in sources), None)
