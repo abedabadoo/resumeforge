@@ -145,7 +145,9 @@ def _fit_reconciled_skills(typesetter, profile, plan, initial_skills, required_s
                 if len(options) == len(skills) and options == skills:
                     continue
                 alternative = typesetter.fit(profile, plan, options, required_slots)
-                if alternative.feasible and fill_value((alternative, options)) > fill_value(best):
+                if (alternative.feasible
+                        and len(alternative.selected) >= len(best[0].selected)
+                        and fill_value((alternative, options)) > fill_value(best)):
                     best = (alternative, options)
             chosen, skills = best
             eligible = selected_skills(
@@ -171,7 +173,8 @@ def _fit_reconciled_skills(typesetter, profile, plan, initial_skills, required_s
         if sentence:
             trial_plan = plan.model_copy(update={"summary": sentence})
             trial = typesetter.fit(profile, trial_plan, skills, required_slots)
-            if trial.feasible and 0 <= trial.bottom_gap < chosen.bottom_gap - 2:
+            if (trial.feasible and len(trial.selected) >= len(chosen.selected)
+                    and 0 <= trial.bottom_gap < chosen.bottom_gap - 2):
                 plan.summary = sentence
                 chosen = trial
     return chosen, skills
