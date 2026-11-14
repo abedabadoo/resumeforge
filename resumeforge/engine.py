@@ -372,7 +372,22 @@ def _run(request: RunRequest, directory: Path, progress: Callable[[str], None] |
     report["unattended_submission_qualified"] = False
     from .planning import CALLS
     report["inference_calls"]=list(CALLS.get() or [])
-    status = "ready" if report["geometry_passed"] and report["quality_review"]["passed"] else "needs_content" if not report["geometry_passed"] else "needs_review"
+    # A targeted, model-powered run must finish the visual page-fill brief,
+    # not silently export a four-line white band as if it were intentional.
+    # Keep a safe one-page draft viewable for diagnosis when no suitable
+    # grounded content combination can be found. Untargeted/source-only runs
+    # remain exportable because no model is available to create refinements.
+    full_required = bool(request.job_description.strip()) and (
+        request.settings.provider != "none" and not verified)
+    report["full_page_required"] = full_required
+    if report["geometry_passed"] and report["quality_review"]["passed"]:
+        status = "ready" if (not full_required or report["full_page_passed"]) else "needs_content"
+        if status == "needs_content":
+            report["warnings"].append(
+                "Automatic content refinement exhausted its measured alternatives without "
+                "meeting the fixed one-page fill target. The preview is not a finished export.")
+    else:
+        status = "needs_content" if not report["geometry_passed"] else "needs_review"
     shutil.copyfile(pdf_path, directory/"preview.pdf")
     if status == "ready":
         shutil.copyfile(pdf_path, directory/"resume.pdf")
