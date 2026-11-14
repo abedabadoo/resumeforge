@@ -137,9 +137,15 @@ class Typesetter:
         return [self.para(s,indent=self.t.bullet_indent,kind="bullet",role_id=c.role_id,candidate_id=c.id)
                 for s in (c.parts or [c.text])]
 
-    def blocks(self, profile: Profile, selected: list[Candidate], skills: list[str]) -> list[Block]:
+    def blocks(self, profile: Profile, selected: list[Candidate], skills: list[str],
+               summary: str = "") -> list[Block]:
         blocks = [self.para(profile.name, bold=True, size=self.t.name_size, leading=self.t.name_size * 1.1, center=True),
                   self.gap(4), self.para(profile.contact, center=True)]
+        if summary:
+            # Real content, not a spacing adjustment. This section is omitted
+            # unless the optimizer can support and fit its actual statement.
+            blocks += self.heading("PROFESSIONAL SUMMARY")
+            blocks += [self.para(summary), self.gap(2)]
         blocks += self.heading("PROFESSIONAL EXPERIENCE")
         for index, role in enumerate(profile.roles):
             if index:
@@ -177,7 +183,7 @@ class Typesetter:
         # nonessential hobbies. Keep the source profile unchanged.
         if drop_interests and plan.keywords and profile.interests:
             profile = profile.model_copy(update={"interests": ""})
-        fixed_blocks = self.blocks(profile, [], skills)
+        fixed_blocks = self.blocks(profile, [], skills, plan.summary)
         fixed = sum(b.height for b in fixed_blocks)
         # Font descenders can extend beyond a Paragraph's nominal line box.
         # Account for the final visible line before choosing a candidate set.
@@ -197,7 +203,7 @@ class Typesetter:
             ink_offset = self.t.body_size-self.t.leading-pdfmetrics.getDescent("RF",self.t.body_size)-self.t.bullet_gap
         capacity = math.floor((self.available - fixed - max(0,ink_offset)) * 100)
         if capacity <= 0:
-            return Selection([], self.blocks(profile, [], skills), fixed, self.available-fixed, False,
+            return Selection([], self.blocks(profile, [], skills, plan.summary), fixed, self.available-fixed, False,
                              ["Fixed sections alone exceed one page. Edit the profile or choose another template."])
         # Each state is height in hundredths of a point -> utility and selections.
         # Track top-requirement coverage in the same discrete layout search.
@@ -244,7 +250,7 @@ class Typesetter:
                 if count == required and (height not in states or value[0] > states[height][0]):
                     states[height] = value
             if not states:
-                return Selection([], self.blocks(profile, [], skills), fixed, self.available-fixed, False,
+                return Selection([], self.blocks(profile, [], skills, plan.summary), fixed, self.available-fixed, False,
                                  ["No one-page combination retains the minimum bullets per role. Shorter grounded alternatives are needed."])
         target = math.floor((self.t.bottom_tolerance-abs(ink_offset)) * 100)
         fitting = {h:v for h,v in states.items() if capacity-h <= target}
@@ -263,7 +269,7 @@ class Typesetter:
             selected = sorted(selected, key=lambda c: (
                 positions.get(c.role_id, len(positions)),
                 -bullet_relevance(c.text, plan.keywords)))
-        blocks = self.blocks(profile, selected, skills)
+        blocks = self.blocks(profile, selected, skills, plan.summary)
         used = sum(b.height for b in blocks)
         warnings = [] if fitting else ["Some page space remains; the best available content was selected automatically. This is not an export error."]
         return Selection(selected, blocks, used, self.available-used, True, warnings)
