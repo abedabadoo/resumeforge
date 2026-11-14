@@ -107,6 +107,56 @@ def _fit_reconciled_skills(typesetter, profile, plan, initial_skills, required_s
     if any(_identity(skill) not in permitted for skill in skills):
         reduced = [skill for skill in skills if _identity(skill) in permitted]
         chosen, skills = fit_bounded(reduced)
+    # Search discrete, evidence-backed Skills allocations after the bullet
+    # selector stabilizes. A different number of relevant skills changes the
+    # measured number of wrapped lines; no font, tracking, spacing, or margins
+    # are altered. This also helps when one otherwise strong set leaves a
+    # large empty band at the bottom of the page.
+    if request.job_description.strip() and chosen.feasible:
+        from .skills import choices, _identity
+        supported = choices(profile, plan.keywords, request.job_description,
+                            selected=chosen.selected, model_order=plan.skill_order)
+        if verified:
+            original_ids = {_identity(x) for x in profile.skills}
+            supported = [c for c in supported if _identity(c.label) in original_ids]
+        if supported:
+            # Do not fill page space with low-value unrelated skills simply
+            # because a technology appears somewhere in the original resume.
+            cutoff = max(12.0, supported[0].score * .19)
+            best = (chosen, skills)
+            def fill_value(pair):
+                fit, labels = pair
+                if not fit.feasible:
+                    return (-1, float("-inf"))
+                remaining = max(0, fit.bottom_gap - typesetter.t.bottom_tolerance)
+                # First minimize unfilled points; use role evidence and stronger
+                # skill scores to break ties, not visual spacing tricks.
+                usefulness = sum(c.score for c in supported
+                                 if _identity(c.label) in {_identity(s) for s in labels})
+                return (-remaining, usefulness)
+            base_count = len(skills)
+            counts = set(range(max(0, base_count - 4),
+                               min(18, len(supported), base_count + 5) + 1))
+            counts.add(base_count)
+            for count in sorted(counts):
+                options = [c.label for c in supported[:count]
+                           if c.score >= cutoff or count <= 7]
+                if len(options) == len(skills) and options == skills:
+                    continue
+                alternative = typesetter.fit(profile, plan, options, required_slots)
+                if alternative.feasible and fill_value((alternative, options)) > fill_value(best):
+                    best = (alternative, options)
+            chosen, skills = best
+            eligible = selected_skills(
+                profile, plan, request.settings, request.edit_request,
+                job_description=request.job_description, selected=chosen.selected)
+            permitted = {_identity(s) for s in eligible}
+            # Extended labels must be independently sourced. Allow additional
+            # highly scored original skills without bypassing provenance.
+            permitted.update(_identity(c.label) for c in supported if c.source == "source")
+            if any(_identity(s) not in permitted for s in skills):
+                skills = [s for s in skills if _identity(s) in permitted]
+                chosen, skills = fit_bounded(skills)
     return chosen, skills
 
 
