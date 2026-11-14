@@ -43,6 +43,7 @@ _USAGE_NEAR_TOOL = re.compile(
     r"\b(?:using|used|with|via|through|integrated with|implemented in|"
     r"configured in|developed in|built in|deployed with|operated|"
     r"administered|automated|monitored|managed|migrated to|"
+    r"deployed|implemented|configured|hardened|provisioned|"
     r"from|tested with|wrote in)\b", re.I)
 # Extract capitalized *phrases* rather than individual words. The old
 # single-word scanner could recognize "PowerShell" but lost "Exchange Online",
@@ -85,6 +86,10 @@ def _named_technologies(posting: str) -> list[str]:
                 term = " ".join(part).strip(".,;:")
                 if len(term) < 3 or len(term) > 70:
                     continue
+                # Headcount/revenue numbers and coordinated lists such as
+                # "Linux and Windows" are not standalone skill labels.
+                if not any(ch.isalpha() for ch in term) or re.search(r"\b(?:and|or)\b", term, re.I):
+                    continue
                 if length == 1:
                     # One capitalized ordinary word isn't proof of a product.
                     # Recognize distinctive camel-case brands, or proper
@@ -116,6 +121,9 @@ def _helpers():
 def _identity(value: str) -> str:
     from .planning import _canonical
     value = value.strip()
+    # Variations of one OS capability should not occupy several Skills slots.
+    if re.fullmatch(r"linux(?:\s*/\s*unix)?|unix\s*/\s*linux", value, re.I):
+        return "linux"
     # "Infrastructure as Code (IaC)" and "IaC" describe one capability.
     # Retain the user's full label when it is the first sourced spelling.
     bracket = re.match(r"^(.+?)\s*\(([A-Za-z0-9+.#/-]{2,15})\)$", value)
@@ -258,7 +266,7 @@ def choices(profile: Profile, keywords: list[Keyword] | list[str],
 
     for index, label in enumerate(original + additions):
         key = _identity(label)
-        if key in seen:
+        if key in seen or not any(ch.isalpha() for ch in label):
             continue
         seen.add(key)
         direct = _direct_job_points(label, rows)
