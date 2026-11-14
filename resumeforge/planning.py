@@ -415,7 +415,13 @@ def _concept_tokens(text: str) -> set[str]:
     """Small occupation-neutral lemmatizer for transferable work concepts."""
     tokens = set()
     for raw in re.findall(r"[a-z][a-z0-9+-]*", text.casefold()):
-        if raw in {"ai", "ml", "api", "llm", "soc"}:
+        # AI, LLMs and model responses are related conceptual objects, not
+        # literal aliases for any named tool. The connection counts only as
+        # partial evidence when another meaningful action also overlaps.
+        if raw in {"ai", "ml", "llm", "model", "models"}:
+            tokens.add("ai-model")
+            continue
+        if raw in {"api", "soc"}:
             tokens.add(raw)
             continue
         if raw in _CAPABILITY_STOPWORDS or len(raw) < 3:
