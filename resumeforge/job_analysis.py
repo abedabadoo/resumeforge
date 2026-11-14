@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from typing import Literal
+import re
 from pydantic import Field
 from .laptop import ask
 from .models import Keyword, Model
 from .planning import (_canonical, _evidence_for, analyze_job, credential_requirement,
                        keyword_matches, valid_requirement_term)
 from .priorities import capability, literal_pattern, normalize, passages, score
-from .requirement_extraction import grounded_label, word_stems
+from .requirement_extraction import grounded_label, word_stems, without_experience_duration
 
 
 class Requirement(Model):
@@ -30,7 +31,30 @@ Ignore compensation, benefits, privacy disclosures, tracking codes, and recruiti
 boilerplate. Never reuse requirements from a previous job or infer them from the
 candidate resume. Reject fragments such as 'with application' and 'are multiplied'.
 For every requirement supply an exact supporting quotation from the given posting.
-Quote actual requirements; do not invent or paraphrase the quoted text."""
+Quote actual requirements; do not invent or paraphrase the quoted text.
+In experience requirements ignore the years-of-experience NUMBER for skill ranking:
+identify the discipline(s) named AFTER the duration. For example, "5+ years
+experience in accounting, payroll, and reporting" means those domains, NOT
+"5+ years" as a capability. Keep labels concise (3-8 complete words), never
+unfinished clauses or fragments; group alternative paths with OR."""
+
+
+def _concise_capability(term):
+    """Replace tenure wrappers and clipped model phrases with usable labels."""
+    term = without_experience_duration(term.strip(" ,.;:-"))
+    if len(term.split()) > 10:
+        for separator in (
+            r"\s+to\s+(?:improve|reduce|support|accelerate|ensure|detect|enable)\b",
+            r"[,;]\s+", r"\s+(?:including|such as)\b",
+        ):
+            match = re.search(separator, term, re.I)
+            if match and len(term[:match.start()].split()) >= 3:
+                term = term[:match.start()]
+                break
+    if len(term.split()) > 10:
+        term = " ".join(term.split()[:10])
+    return re.sub(r"\s+(?:and|or|to|for|with|including|of)$", "", term,
+                                 flags=re.I).strip(" ,.;:-")
 
 
 def _capability_key(term):
@@ -123,12 +147,15 @@ def analyze_posting(profile, job, keywords, settings):
         education.append(profile.certifications)
     by_model = {}
     for finding in reading.requirements:
+        label = _concise_capability(finding.capability)
+        if not valid_requirement_term(label):
+            continue
         quote = " ".join(finding.quote.split())
         # Passage parsing normalizes terminal punctuation, but the model may
         # legitimately quote the original sentence including its final period.
         if quote.casefold().rstrip(" .") not in quoted_source:
             continue
-        name = _capability_key(finding.capability)
+        name = _capability_key(label)
         row = by_label.get(name) or by_alias.get(name)
         if row is not None and finding.kind == "credential" and row.get("kind") != "credential":
             target = Keyword(term=row["term"], weight=row["weight"], required=row["required"],
@@ -145,19 +172,19 @@ def analyze_posting(profile, job, keywords, settings):
         # requiring every word to appear verbatim in the job posting.
         lexical = row and any(keyword_matches(quote, term)
                               for term in [row["term"], *row["terms"]])
-        semantic = grounded_label(finding.capability, quote)
+        semantic = grounded_label(label, quote)
         if not lexical and not semantic:
             continue
         if row is None:
-            if not valid_requirement_term(finding.capability):
+            if not valid_requirement_term(label):
                 continue
             rank = score([source_passage], [source_passage.text])
             if not rank:
                 continue
             _, weight, required, rationale = rank
-            kind = "credential" if (finding.kind == "credential" or credential_requirement(finding.capability)) \
+            kind = "credential" if (finding.kind == "credential" or credential_requirement(label)) \
                    else "strength" if finding.kind == "strength" else "skill"
-            target = Keyword(term=finding.capability, weight=weight, required=required,
+            target = Keyword(term=label, weight=weight, required=required,
                              rationale=rationale, kind=kind)
             row = {**_evidence_for(target, records, profile.skills, education), "terms": [target.term]}
         # A model's natural-language capability description is rarely worded
@@ -170,7 +197,7 @@ def analyze_posting(profile, job, keywords, settings):
                 if existing["kind"] != "credential" and existing["evidence"] != "missing"
                 and len(existing["term"]) >= 4
                 and (keyword_matches(quote, existing["term"])
-                     or keyword_matches(finding.capability, existing["term"]))
+                     or keyword_matches(label, existing["term"]))
             ]
             if anchors:
                 anchors.sort(key=lambda existing: (
