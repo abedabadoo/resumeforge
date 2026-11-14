@@ -358,7 +358,29 @@ def _asserted_text(body):
         c, re.I))
 
 
-def _evidence_for(keyword, records, skills, education=(), certifications=""):
+def _role_title_evidence(term, roles):
+    """Titles support a professional discipline, not the tenure or duties.
+
+    Match normalized multiword occupational descriptions (e.g. security
+    engineering / Security Engineer) and OR alternatives without assuming
+    that the full job qualification, including years, is satisfied.
+    """
+    from .requirement_extraction import word_stems, without_experience_duration
+    discipline = without_experience_duration(term)
+    alternatives = re.split(r"\s*(?:,|\band/or\b|\bor\b)\s*", discipline, flags=re.I)
+    matches = []
+    for role in roles:
+        title = word_stems(role.title)
+        if any(len(words := word_stems(part)) >= 2
+               and len(words & title) >= 2
+               and len(words & title) / len(words) >= .8
+               for part in alternatives):
+            matches.append(" · ".join(x for x in
+                (role.title, role.company, role.dates) if x))
+    return matches
+
+
+def _evidence_for(keyword, records, skills, education=(), certifications="", roles=()):
     term = keyword.term
     if keyword.kind == "credential":
         matches = [degree for degree in education if _credential_matches(degree, term)]
@@ -376,11 +398,12 @@ def _evidence_for(keyword, records, skills, education=(), certifications=""):
     # technology is not proof of hands-on expertise with that technology.
     cert_hits = [part.strip() for part in re.split(r"[,;\n]", certifications)
                  if part.strip() and keyword_matches(part, term)]
+    role_matches = _role_title_evidence(term, roles)
     evidence = ("exact" if exact or direct_skills or cert_hits else
-                "related" if linked or related_skills else "missing")
+                "related" if linked or related_skills or role_matches else "missing")
     return {**keyword.model_dump(), "evidence": evidence, "evidence_ids": exact or linked,
             "exact_skills": direct_skills, "related_skills": related_skills,
-            "exact_certifications": cert_hits}
+            "role_matches": role_matches, "exact_certifications": cert_hits}
 
 
 def analyze_job(profile, job_description, keywords=()):
@@ -390,7 +413,8 @@ def analyze_job(profile, job_description, keywords=()):
     if profile.certifications:
         education.append(profile.certifications)
     return [{**_evidence_for(kw, records, profile.skills, education,
-                             certifications=profile.certifications), "terms": terms}
+                             certifications=profile.certifications,
+                             roles=profile.roles), "terms": terms}
             for _, kw, terms in _targets(profile, job_description, keywords)]
 
 

@@ -229,8 +229,8 @@ class Passage:
 _HEADINGS = {
     "preferred": r"(?:preferred|desirable|desired(?:\s+skills?\s*/\s*certifications?)?|additional|bonus|nice[- ]to[- ]have|good[- ]to[- ]have)(?: qualifications?| requirements?| skills?| experience|s)?",
     "required": r"(?:required|minimum|essential|basic)(?: qualifications?| requirements?| skills?(?:\s*(?:&|and|/)\s*qualifications?)?| experience)?|requirements?|what you(?:'|’)ll need|what you bring|you should have|must[- ]have(?: technical/functional skills)?|qualifications",
-    "duties": r"(?:key |primary |core |essential )?(?:responsibilities|duties)|what you(?:'|’)ll do|where you(?:'|’)ll make an impact|the role|your impact",
-    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity(?: employer)?|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company)|how to apply|how we work|why this role is special|physical demands|work environment|legal notices?|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
+    "duties": r"(?:key |primary |core |essential )?(?:responsibilities|duties)|what you(?:'|’)ll do|where you(?:'|’)ll make an impact|about (?:the|this) (?:role|job|position)|the role|your impact",
+    "ignore": r"salary(?: range)?|compensation(?: and benefits)?|benefits|equal (?:employment )?opportunity(?: employer)?|commitment to equal opportunity|global data privacy notice|data privacy notice|privacy notice|privacy policy|about (?:us|the company)|how to apply|how we work|why this role is special|the team|who we are|our (?:company|organization)|physical demands|work environment|legal notices?|(?:california|washington|colorado|illinois|new york city) pay range|#?li-[a-z0-9-]+",
 }
 _EXAMPLES = re.compile(r"\b(?:such as|e\.g\.|tools? (?:like|including)|one of|any of|such tools as)\b", re.I)
 _PREFERRED = re.compile(r"\b(?:preferred|desirable|nice[- ]to[- ]have|good[- ]to[- ]have|bonus|a plus)\b", re.I)
@@ -246,6 +246,14 @@ def passages(job):
         if not line:
             continue
         if line.casefold().strip(": ") in ("job description", "job title", "position"):
+            continue
+        # Employer-specific About headings are company information, not
+        # qualifications. "About the role" remains a duties heading.
+        if re.fullmatch(r"about\s+(?!the\s+(?:job|role|position)\b|this\s+(?:job|role|position)\b)(?:[\w&.'-]+\s*){1,4}", line.rstrip(" :–—-"), re.I):
+            section = "ignore"
+            continue
+        # Standalone recruiting markers are not required skills.
+        if re.fullmatch(r"(?:#?LI[-_][A-Z0-9_-]+|IND[A-Z0-9]{3,}|REQ[-_#]?\d{4,})", line, re.I):
             continue
         for name, expression in _HEADINGS.items():
             header = re.match(rf"^(?:{expression})(?:\s*[:–—-]\s*|\s*$)", line, re.I)
@@ -327,7 +335,7 @@ def valid_observed_phrase(phrase):
     phrase = phrase.strip(" ,.;:()")
     return bool(phrase and not _FRAGMENT_EDGE.search(phrase)
                 and normalize(phrase) not in {
-                    "not", "tools", "analyzing", "clouds", "gcs",
+                    "not", "tools", "tool", "analyzing", "clouds", "gcs",
                     "modern software", "working relationships",
                     "modern engineering depth", "cross system thinking",
                     "curiosity", "ownership", "att", "ck", "az",
@@ -384,6 +392,16 @@ def observed_phrases(rows):
                 row.text))
         for term in tokens:
             term = term.strip(" .,:;")
+            if term.isupper() and len(term.split()) == 1:
+                # Fragments from ATT&CK and AZ-500 are not independent skills.
+                occurrences = list(re.finditer(
+                    r"(?<![\w])" + re.escape(term) + r"(?![\w])", row.text))
+                if occurrences and all(
+                    (m.start() > 0 and row.text[m.start()-1] in "&+-") or
+                    (m.end() < len(row.text) and row.text[m.end()] in "&+-") or
+                    bool(re.match(r"\s+[A-Z]{2,}&[A-Z]{2,}\b", row.text[m.end():]))
+                    for m in occurrences):
+                    continue
             if not valid_observed_phrase(term):
                 continue
             norm = normalize(term)

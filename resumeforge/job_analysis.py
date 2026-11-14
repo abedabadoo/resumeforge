@@ -160,7 +160,7 @@ def analyze_posting(profile, job, keywords, settings):
         if row is not None and finding.kind == "credential" and row.get("kind") != "credential":
             target = Keyword(term=row["term"], weight=row["weight"], required=row["required"],
                              rationale=row["rationale"], kind="credential")
-            row = {**_evidence_for(target, records, profile.skills, education),
+            row = {**_evidence_for(target, records, profile.skills, education, roles=profile.roles),
                    "terms": row.get("terms", [target.term])}
             by_label[_capability_key(row["term"])] = row
         source_passage = next((source for source in passages(job)
@@ -176,6 +176,12 @@ def analyze_posting(profile, job, keywords, settings):
         if not lexical and not semantic:
             continue
         if row is None:
+            # Overlapping generic words ("monitoring", "response") do not
+            # license adding an unmentioned security product or specialty.
+            # Known catalog aliases have already resolved to an existing row.
+            named = re.findall(r"(?<![\w])(?:[A-Z]{2,}[A-Z0-9+#]*)(?![\w])", label)
+            if any(not keyword_matches(quote, tech) for tech in named):
+                continue
             if not valid_requirement_term(label):
                 continue
             rank = score([source_passage], [source_passage.text])
@@ -186,7 +192,7 @@ def analyze_posting(profile, job, keywords, settings):
                    else "strength" if finding.kind == "strength" else "skill"
             target = Keyword(term=label, weight=weight, required=required,
                              rationale=rationale, kind=kind)
-            row = {**_evidence_for(target, records, profile.skills, education), "terms": [target.term]}
+            row = {**_evidence_for(target, records, profile.skills, education, roles=profile.roles), "terms": [target.term]}
         # A model's natural-language capability description is rarely worded
         # exactly like a source-resume bullet. Borrow ONLY partial, already
         # established evidence for concrete requirements named in the same
