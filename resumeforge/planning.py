@@ -415,6 +415,9 @@ def _concept_tokens(text: str) -> set[str]:
     """Small occupation-neutral lemmatizer for transferable work concepts."""
     tokens = set()
     for raw in re.findall(r"[a-z][a-z0-9+-]*", text.casefold()):
+        if raw in {"ai", "ml", "api", "llm", "soc"}:
+            tokens.add(raw)
+            continue
         if raw in _CAPABILITY_STOPWORDS or len(raw) < 3:
             continue
         token = re.sub(r"(?:ization|isations|ation|ions|ing|ed|es|s)$", "", raw)
