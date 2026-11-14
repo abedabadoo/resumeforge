@@ -26,6 +26,13 @@ def refit_examples(request, plan, selection, report, review):
     ]
     if not editable:
         return False
+    from .planning import bullet_relevance
+    editable.sort(key=lambda variants: (
+        -bullet_relevance(chosen[variants[0].slot_id].text, plan.keywords),
+        -len(chosen[variants[0].slot_id].text.split())))
+    # Keep the local model's task small enough to produce complete, testable
+    # short/long pairs rather than truncating a large JSON response.
+    editable = editable[:6]
     roles = {r.id: r.title for r in request.profile.roles}
     rows = []
     for i, variants in enumerate(editable, 1):
@@ -73,6 +80,7 @@ def refit_examples(request, plan, selection, report, review):
             digest = hashlib.sha256((base.slot_id + "\0" + text).encode()).hexdigest()[:18]
             added.append(base.model_copy(update={"id": "idea:" + digest, "text": text, "origin": "model-example",
                          "rationale": "Measured full-page content refinement based on the selected accomplishment.",
+                         "evidence_ids": [], "parts": [],
                          "keywords": [k.term for k in plan.keywords if keyword_matches(text, k.term)]}))
             seen.add(text.casefold())
     plan.candidates.extend(added)
