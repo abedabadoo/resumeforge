@@ -37,8 +37,8 @@ def refit_examples(request, plan, selection, report, review):
                "job_requirements": request.job_description[:3500],
                "editing_brief": request.edit_request, "feedback": review.issues,
                "page_feasible": selection.feasible, "unused_points": report["bottom_gap_pt"],
-               "needed_lines": max(0, round(max(0, report["ink_bottom_gap_pt"] -
-                           report["target_bottom_gap_pt"]) / report["template"]["leading"])),
+               "needed_lines": max(0, round(max(0, report.get("ink_bottom_gap_pt", report["bottom_gap_pt"]) -
+                           report.get("target_bottom_gap_pt", report["template"]["leading"])) / report["template"]["leading"])),
                "line_height_points": report["template"]["leading"]}
     prompt = ("Refine the ACTUAL selected resume bullets to fill exactly one page with meaningful content. "
               "The PDF font, margins, line spacing and typography are LOCKED. A positive unused_points "
@@ -67,7 +67,7 @@ def refit_examples(request, plan, selection, report, review):
         seen = {c.text.casefold() for c in plan.candidates + added}
         for text in (story.concise, story.detailed):
             if (not printable(text) or text.casefold() in seen or
-                    not set(re.findall(r"\d+(?:[.,]\d+)*%?", text)) <= metrics or
+                    not set(re.findall(r"\d+(?:[.,]\d+)*%?", text)) == metrics or
                     (base.keywords and not any(keyword_matches(text, term) for term in base.keywords))):
                 continue
             digest = hashlib.sha256((base.slot_id + "\0" + text).encode()).hexdigest()[:18]
