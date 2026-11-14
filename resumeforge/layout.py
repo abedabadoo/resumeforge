@@ -227,7 +227,7 @@ class Typesetter:
                     mask = 0
                     for i, k in enumerate(coverage_keys):
                         if (keyword_matches(c.text, k.term)
-                                or (capability_overlap(c.text, k.term) >= .35)):
+                                or (capability_overlap(c.text, k.term) >= .25)):
                             mask |= 1 << i
                     options.append((h, utility, c, mask))
                 # A required editorial target cannot disappear to make its page fit.
