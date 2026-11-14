@@ -123,7 +123,7 @@ class ModelSettings(Model):
     model: str = ""
     api_key_env: str = "RESUMEFORGE_API_KEY"
     timeout_seconds: int = Field(default=180, ge=10, le=900)
-    max_rounds: int = Field(default=3, ge=1, le=5)
+    max_rounds: int = Field(default=5, ge=1, le=5)
 
 
 class Template(Model):
