@@ -89,7 +89,7 @@ class PageRefinementTests(unittest.TestCase):
         self.assertTrue(after["bounds_passed"])
 
     @patch("resumeforge.example_refit.ask", return_value=Stories(bullets=[
-        Story(slot=1, concise="Too short", detailed="Still too short")]))
+        Story(slot=1, concise="Too few words for a resume", detailed="Still not enough words for a bullet")]))
     def test_job_targeted_model_cannot_export_four_line_underfill_as_final(self, ask):
         p = small_profile()
         plan = source_plan(p)
