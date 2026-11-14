@@ -178,7 +178,7 @@ class Typesetter:
         return blocks
 
     def fit(self, profile: Profile, plan: Plan, skills: list[str], required_slots=frozenset(), *, drop_interests=True) -> Selection:
-        from .planning import bullet_relevance, keyword_matches, capability_overlap
+        from .planning import bullet_relevance, keyword_matches, capability_overlap, bullet_order_priority
         # In a tailored application, give relevant evidence page space before
         # nonessential hobbies. Keep the source profile unchanged.
         if drop_interests and plan.keywords and profile.interests:
@@ -268,6 +268,7 @@ class Typesetter:
             positions = {role.id: i for i, role in enumerate(profile.roles)}
             selected = sorted(selected, key=lambda c: (
                 positions.get(c.role_id, len(positions)),
+                bullet_order_priority(c.text, plan.keywords),
                 -bullet_relevance(c.text, plan.keywords)))
         blocks = self.blocks(profile, selected, skills, plan.summary)
         used = sum(b.height for b in blocks)
