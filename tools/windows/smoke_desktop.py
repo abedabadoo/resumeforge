@@ -133,12 +133,12 @@ def check_builds(app, data_dir):
         window.policy.setCurrentIndex(window.policy.findData("verified"))
         build.click()
         wait_for(app, lambda: bool(window.result) and window.run_dir != previous and
-                 window.result.get("status") == "needs_content",
-                 "Sparse profile did not report its underfilled page")
-        assert window.result["report"]["geometry_passed"] is False
-        assert not save.isEnabled()
-        assert not (Path(window.run_dir) / "resume.pdf").exists()
-        print("The underfilled draft withheld export and invalidated the earlier selection.")
+                 window.result.get("status") == "ready" and save.isEnabled(),
+                 "The sparse but safe one-page resume did not become export-ready")
+        assert window.result["report"]["geometry_passed"] is True
+        assert window.result["report"]["full_page_passed"] is False
+        assert (Path(window.run_dir) / "resume.pdf").exists()
+        print("Safe underfilled draft exported; the earlier selection was invalidated.")
     finally:
         window.close()
         app.processEvents()
