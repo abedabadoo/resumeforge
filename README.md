@@ -6,7 +6,7 @@ A native Windows and Intel macOS desktop app for tailoring a resume and saving a
 
 ## Install on Windows
 
-Download **ResumeForge-Setup-x64.exe** from the [Windows desktop release](https://github.com/abedabadoo/resumeforge/releases/tag/v0.4.1). Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs.
+Download **ResumeForge-Setup-x64.exe** from the [Windows releases](https://github.com/abedabadoo/resumeforge/releases). Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs. The editor stacks its controls and preview when the window is narrow, including a 900 × 1440 portrait display.
 
 A fresh public install opens a fictional demo profile. An upgrade opens your previously saved workspace. Import your resume or open your existing profile, then choose **Analyze job description** to see the posting’s ranked priorities.
 

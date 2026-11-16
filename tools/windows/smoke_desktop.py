@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QFileDialog, QLabel, QPlainTextEdit, QPushButton
 from pypdf import PdfReader
 
@@ -44,11 +44,26 @@ def widget(window, cls, name):
     return obj
 
 
+def check_portrait_layout(app, window):
+    for width in (900, 700):
+        window.resize(width, 700)
+        app.processEvents()
+        assert window.splitter.orientation() == Qt.Orientation.Vertical
+        assert window.left.width() > 0 and window.right.width() > 0
+        for control in (window.import_button, window.save_button,
+                        window.settings_button, window.export_button):
+            assert control.isVisible(), control.objectName()
+            assert control.mapTo(window, control.rect().topRight()).x() <= window.width(), control.objectName()
+    window.resize(1220, 835)
+    app.processEvents()
+
+
 def check_builds(app, data_dir):
     window = desktop_window.MainWindow(data_dir)
     window.settings = ModelSettings(provider="none")
     window.show()
     try:
+        check_portrait_layout(app, window)
         # This modal imports QtNetwork for local model discovery. Exercise it
         # in the frozen runtime as well as on a developer machine.
         observed = []
@@ -74,8 +89,11 @@ def check_builds(app, data_dir):
         assert window.policy.currentData() == "inspiration"
         window.keywords.setPlainText("\n".join(["CI/CD pipelines", *[k for k in priorities if k != "CI/CD pipelines"]]))
         build.click()
-        wait_for(app, lambda: window.result is not None and save.isEnabled(),
-                 "Default profile did not produce an export-ready page")
+        try:
+            wait_for(app, lambda: window.result is not None and save.isEnabled(),
+                     "Default profile did not produce an export-ready page")
+        except RuntimeError as exc:
+            raise RuntimeError(f"{exc}: {window.status.text()}; result={window.result and window.result.get('status')}") from exc
         assert window.result["status"] == "ready"
         assert window.result["report"]["model_used"] is None
         assert preview.pixmap() is not None and not preview.pixmap().isNull()
@@ -132,14 +150,20 @@ def check_builds(app, data_dir):
         wait_for(app, lambda: window.worker is None and build.isVisible(), "Unable to review new source")
         window.policy.setCurrentIndex(window.policy.findData("verified"))
         build.click()
-        wait_for(app, lambda: bool(window.result) and window.run_dir != previous and
-                 window.result.get("status") == "needs_content",
-                 "Sparse profile did not report its underfilled page")
-        assert window.result["report"]["geometry_passed"] is False
-        assert not save.isEnabled()
-        assert not (Path(window.run_dir) / "resume.pdf").exists()
-        print("The underfilled draft withheld export and invalidated the earlier selection.")
+        try:
+            wait_for(app, lambda: bool(window.result) and window.run_dir != previous,
+                     "Sparse profile did not complete")
+        except RuntimeError as exc:
+            raise RuntimeError(f"{exc}: {window.status.text()}; result={window.result and window.result.get('status')}") from exc
+        assert window.result["status"] == "ready"
+        assert window.result["report"]["geometry_passed"] is True
+        assert window.result["report"]["full_page_passed"] is False
+        assert window.result["report"]["full_page_required"] is False
+        assert save.isEnabled()
+        assert (Path(window.run_dir) / "resume.pdf").exists()
+        print("A sparse source-only draft remained exportable and invalidated the earlier selection.")
     finally:
+        window._dirty = False
         window.close()
         app.processEvents()
 

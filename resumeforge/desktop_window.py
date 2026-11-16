@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit,
+from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLineEdit,
     QListWidget, QListWidgetItem, QMainWindow, QFileDialog, QMessageBox, QPlainTextEdit,
     QProgressBar, QPushButton, QSplitter, QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
         self._updating = False
         self.setWindowTitle("ResumeForge")
         self.resize(1220, 835)
-        self.setMinimumSize(790, 590)
+        self.setMinimumSize(580, 590)
         self.setStyleSheet(STYLE)
         self._create_interface()
         self._show_profile()
@@ -161,12 +161,12 @@ class MainWindow(QMainWindow):
         outer.setSpacing(0)
         header = QWidget()
         header.setObjectName("banner")
-        top = QHBoxLayout(header)
+        top = QGridLayout(header)
         top.setContentsMargins(20, 12, 20, 12)
-        top.addWidget(plain_label("ResumeForge", "brand"))
-        top.addStretch()
+        top.setHorizontalSpacing(8)
+        top.setVerticalSpacing(8)
+        self.brand = plain_label("ResumeForge", "brand")
         self.account = plain_label("", "account")
-        top.addWidget(self.account)
         self.import_button = button("Import resume…", "importButton", self.import_resume)
         self.save_button = button("Save workspace", "saveButton", self.save_workspace)
         self.settings_button = button("Model settings…", "settingsButton", self.configure_model)
@@ -174,8 +174,9 @@ class MainWindow(QMainWindow):
         controls = [self.import_button, self.save_button, self.settings_button]
         if sys.platform == "darwin" and getattr(sys, "frozen", False):
             controls.append(self.update_button)
-        for widget in controls:
-            top.addWidget(widget)
+        self.header_controls = controls
+        self.header_grid = top
+        self.layout_mode = None
         outer.addWidget(header)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
@@ -210,20 +211,58 @@ class MainWindow(QMainWindow):
         self.progress.setTextVisible(False)
         self.progress.hide()
         content.addWidget(self.progress)
-        footer = QHBoxLayout()
+        footer = QGridLayout()
         self.status = plain_label("Paste a job description to see its priorities.", "runStatus")
-        footer.addWidget(self.status, 1)
+        self.status.setWordWrap(True)
+        footer.addWidget(self.status, 0, 0, 1, 3)
         self.review_button = button("Review proposed claims…", "reviewButton", self.review_claims)
         self.review_button.hide()
-        footer.addWidget(self.review_button)
+        footer.addWidget(self.review_button, 1, 0)
         self.edit_bullets_button = button("Edit generated bullets…", "editGenerated", self.edit_generated)
         self.edit_bullets_button.hide()
-        footer.addWidget(self.edit_bullets_button)
+        footer.addWidget(self.edit_bullets_button, 1, 1)
         self.export_button = button("Save checked PDF…", "exportButton", self.export_pdf)
         self.export_button.setEnabled(False)
-        footer.addWidget(self.export_button)
+        footer.addWidget(self.export_button, 1, 2)
         content.addLayout(footer)
         outer.addLayout(content, 1)
+        self._fit_workspace()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "header_grid"):
+            self._fit_workspace()
+
+    def _fit_workspace(self):
+        mode = "compact" if self.width() <= 720 else "portrait" if self.width() <= 1100 else "wide"
+        if mode == self.layout_mode:
+            return
+        self.layout_mode = mode
+        grid = self.header_grid
+        for widget in (self.brand, self.account, *self.header_controls):
+            grid.removeWidget(widget)
+        for column in range(6):
+            grid.setColumnStretch(column, 0)
+        grid.addWidget(self.brand, 0, 0)
+        if mode == "wide":
+            grid.setColumnStretch(0, 1)
+            grid.addWidget(self.account, 0, 1)
+            for index, control in enumerate(self.header_controls, 2):
+                grid.addWidget(control, 0, index)
+        elif mode == "portrait":
+            grid.addWidget(self.account, 0, 1, 1, 3, Qt.AlignmentFlag.AlignRight)
+            for index, control in enumerate(self.header_controls):
+                grid.setColumnStretch(index, 1)
+                grid.addWidget(control, 1, index)
+        else:
+            grid.addWidget(self.account, 0, 1, Qt.AlignmentFlag.AlignRight)
+            for index, control in enumerate(self.header_controls):
+                grid.setColumnStretch(index % 2, 1)
+                grid.addWidget(control, 1 + index // 2, index % 2)
+        orientation = Qt.Orientation.Horizontal if mode == "wide" else Qt.Orientation.Vertical
+        if self.splitter.orientation() != orientation:
+            self.splitter.setOrientation(orientation)
+            self.splitter.setSizes([430, 770] if mode == "wide" else [440, 770])
 
     def _tailor_tab(self):
         self.steps = QStackedWidget()
