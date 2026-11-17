@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QFileDialog, QLabel, QPlainTextEdit, QPushButton
+from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QFileDialog, QLabel, QMessageBox, QPlainTextEdit, QPushButton
 from pypdf import PdfReader
 
 from resumeforge import desktop_window
@@ -51,7 +51,7 @@ def check_portrait_layout(app, window):
         assert window.splitter.orientation() == Qt.Orientation.Vertical
         assert window.left.width() > 0 and window.right.width() > 0
         for control in (window.import_button, window.save_button,
-                        window.settings_button, window.export_button):
+                        window.settings_button, window.update_button, window.export_button):
             assert control.isVisible(), control.objectName()
             assert control.mapTo(window, control.rect().topRight()).x() <= window.width(), control.objectName()
     window.resize(1220, 835)
@@ -64,6 +64,11 @@ def check_builds(app, data_dir):
     window.show()
     try:
         check_portrait_layout(app, window)
+        with patch("resumeforge.windows_updates.check_for_update", return_value=None), \
+                patch.object(QMessageBox, "information"):
+            window.update_button.click()
+            wait_for(app, lambda: not window._updating, "Windows update check did not finish")
+            assert window.status.text() == "No newer release is available."
         # This modal imports QtNetwork for local model discovery. Exercise it
         # in the frozen runtime as well as on a developer machine.
         observed = []

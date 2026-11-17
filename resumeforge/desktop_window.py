@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
         self.settings_button = button("Model settings…", "settingsButton", self.configure_model)
         self.update_button = button("Check for updates…", "updateButton", self.check_for_updates)
         controls = [self.import_button, self.save_button, self.settings_button]
-        if sys.platform == "darwin" and getattr(sys, "frozen", False):
+        if sys.platform == "win32" or (sys.platform == "darwin" and getattr(sys, "frozen", False)):
             controls.append(self.update_button)
         self.header_controls = controls
         self.header_grid = top
@@ -850,11 +850,15 @@ class MainWindow(QMainWindow):
             return
         self._updating = True
         self.update_button.setEnabled(False)
-        self.status.setText("Checking for an Intel Mac update…")
+        self.status.setText("Checking for a Windows update…" if sys.platform == "win32"
+                            else "Checking for an Intel Mac update…")
 
         def work():
             try:
-                from .mac_updates import check_for_update
+                if sys.platform == "win32":
+                    from .windows_updates import check_for_update
+                else:
+                    from .mac_updates import check_for_update
                 self.update_signals.checked.emit(check_for_update())
             except Exception as exc:
                 self.update_signals.failed.emit(str(exc))
@@ -863,13 +867,15 @@ class MainWindow(QMainWindow):
 
     def _update_checked(self, update):
         if update is None:
-            self._finish_update("ResumeForge is up to date.")
-            QMessageBox.information(self, "ResumeForge updates", "You're running the latest available Intel Mac release.")
+            self._finish_update("No newer release is available.")
+            message = ("No newer Windows release is published."
+                       if sys.platform == "win32" else "You're running the latest available Intel Mac release.")
+            QMessageBox.information(self, "ResumeForge updates", message)
             return
         size = round(update.size / (1024 * 1024))
         question = (f"ResumeForge {update.tag} is available ({size} MB).\n\n"
-                    "ResumeForge will download and verify the update, close, replace "
-                    "the app, then reopen it. Your saved workspace stays intact.\n\n"
+                    "ResumeForge will download and verify the update, close, install "
+                    "the new version, then reopen your workspace.\n\n"
                     "Download this update?")
         answer = QMessageBox.question(self, "ResumeForge update available", question,
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -877,11 +883,15 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.StandardButton.Yes:
             self._finish_update("Update cancelled.")
             return
-        self.status.setText("Downloading and verifying the Intel Mac update…")
+        self.status.setText("Downloading and verifying the Windows update…" if sys.platform == "win32"
+                            else "Downloading and verifying the Intel Mac update…")
 
         def work():
             try:
-                from .mac_updates import prepare_update
+                if sys.platform == "win32":
+                    from .windows_updates import prepare_update
+                else:
+                    from .mac_updates import prepare_update
                 self.update_signals.prepared.emit(prepare_update(update))
             except Exception as exc:
                 self.update_signals.failed.emit(str(exc))
@@ -889,12 +899,18 @@ class MainWindow(QMainWindow):
         threading.Thread(target=work, daemon=True).start()
 
     def _update_prepared(self, prepared):
-        from .mac_updates import install_after_exit
-        move = (f"\n\nThis copy is in a protected location. The updated version will "
-                f"be installed at:\n{prepared.destination_app}"
-                if prepared.installed_app != prepared.destination_app else "")
+        if sys.platform == "win32":
+            from .windows_updates import install_after_exit
+            move = f"\n\nInstall location:\n{prepared.target_dir}"
+            verification = "The update passed SHA-256 integrity verification."
+        else:
+            from .mac_updates import install_after_exit
+            move = (f"\n\nThis copy is in a protected location. The updated version will "
+                    f"be installed at:\n{prepared.destination_app}"
+                    if prepared.installed_app != prepared.destination_app else "")
+            verification = "The update passed integrity and app-signature checks."
         answer = QMessageBox.question(
-            self, "Ready to install", "The update passed integrity and app-signature checks."
+            self, "Ready to install", verification
             + move + "\n\nClose ResumeForge and install it now?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes)
@@ -908,7 +924,10 @@ class MainWindow(QMainWindow):
             self._finish_update("Close cancelled; update was not installed.")
             return
         try:
-            install_after_exit(prepared)
+            if sys.platform == "win32":
+                install_after_exit(prepared, self.data_dir)
+            else:
+                install_after_exit(prepared)
         except Exception as exc:
             self.show()
             self._update_failed(str(exc))

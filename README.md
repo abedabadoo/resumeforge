@@ -10,6 +10,8 @@ Download **ResumeForge-Setup-x64.exe** from the [Windows releases](https://githu
 
 A fresh public install opens a fictional demo profile. An upgrade opens your previously saved workspace. Import your resume or open your existing profile, then choose **Analyze job description** to see the posting’s ranked priorities.
 
+Use **Check for updates…** in the desktop toolbar to look for a newer published Windows release. If one is available, ResumeForge downloads the official installer, checks its GitHub SHA-256 digest, and asks before closing and installing. It then reopens the same workspace. The check runs only when you click the button; it does not install updates in the background.
+
 The first launch can build with offline examples. To generate new wording with Qwen, start your local model service on your PC. Open **Model settings**, select **Ollama** or **OpenAI-compatible endpoint**, enter the service URL, and choose **Find installed models** or enter its model name. The PC model is a separate installation. Your workspace, generated previews, and run reports are stored under `%LOCALAPPDATA%\ResumeForge\workspace`.
 
 For development from a Windows source checkout with Python installed, run **Launch ResumeForge on Windows.cmd**. To recreate the downloadable installer, run `python tools/windows/build.py --work dist/build --out dist/windows` with Go and NSIS available. `tools/windows/runtime-lock.json` records the downloads and SHA-256 hashes.
