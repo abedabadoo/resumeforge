@@ -6,16 +6,19 @@ from pathlib import Path
 import re
 import threading
 import sys
+import os
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLineEdit,
     QListWidget, QListWidgetItem, QMainWindow, QFileDialog, QMessageBox, QPlainTextEdit,
+    QDialog, QDialogButtonBox,
     QProgressBar, QPushButton, QSplitter, QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
 from .desktop_preview import PagePreview, plain_label
 from .desktop_support import export_checked, load_draft, save_draft
+from .cover_letter import draft_text, export_pdf as export_cover_pdf, role_folder
 from .engine import run
 from .ideas import IdeaRequest, brainstorm
 from .importing import MAX_BYTES, import_document
@@ -115,6 +118,8 @@ class MainWindow(QMainWindow):
     def __init__(self, data_dir: Path):
         super().__init__()
         self.data_dir = Path(data_dir)
+        self.job_company = ""
+        self.job_title = ""
         self.profile = Profile.model_validate_json((Path(__file__).with_name("data") /
                                                     "abu.profile.json").read_text(encoding="utf-8"))
         self.settings = default_settings()
@@ -172,7 +177,9 @@ class MainWindow(QMainWindow):
         self.settings_button = button("Model settings…", "settingsButton", self.configure_model)
         self.update_button = button("Check for updates…", "updateButton", self.check_for_updates)
         controls = [self.import_button, self.save_button, self.settings_button]
-        if sys.platform == "win32" or (sys.platform == "darwin" and getattr(sys, "frozen", False)):
+        if os.environ.get("RESUMEFORGE_COMBINED") != "1" and (
+            sys.platform == "win32" or (sys.platform == "darwin" and getattr(sys, "frozen", False))
+        ):
             controls.append(self.update_button)
         self.header_controls = controls
         self.header_grid = top
@@ -224,6 +231,9 @@ class MainWindow(QMainWindow):
         self.export_button = button("Save checked PDF…", "exportButton", self.export_pdf)
         self.export_button.setEnabled(False)
         footer.addWidget(self.export_button, 1, 2)
+        self.cover_button = button("Create cover letter…", "coverButton", self.create_cover_letter)
+        self.cover_button.setEnabled(False)
+        footer.addWidget(self.cover_button, 2, 2)
         content.addLayout(footer)
         outer.addLayout(content, 1)
         self._fit_workspace()
@@ -501,6 +511,7 @@ class MainWindow(QMainWindow):
             self.review_button.hide()
             self.edit_bullets_button.hide()
             self.export_button.setEnabled(False)
+            self.cover_button.setEnabled(False)
             self.right.setTabText(0, "Source resume")
             self.preview.show_source(self.profile)
             self.review_notes.clear()
@@ -520,7 +531,8 @@ class MainWindow(QMainWindow):
                 "profile": self.profile.model_dump(),
                 "settings": self._current_settings().model_dump(), "job_description": self.job.toPlainText(),
                 "edit_request": self.brief.toPlainText(), "keywords": self.keywords.toPlainText(),
-                "ideas": self.ideas, "idea_role": self.idea_role.currentData(), "idea_topic": self.idea_topic.text()}
+                "ideas": self.ideas, "idea_role": self.idea_role.currentData(), "idea_topic": self.idea_topic.text(),
+                "job_company": self.job_company, "job_title": self.job_title}
 
     def _restore(self):
         try:
@@ -537,6 +549,8 @@ class MainWindow(QMainWindow):
             restored = {key: [Idea.model_validate(i).model_dump() for i in batch[:24]]
                         for key, batch in draft.get("ideas", {}).items() if key in roles}
             self.profile, self.settings, self.ideas = profile, settings, restored
+            self.job_company = str(draft.get("job_company") or "")
+            self.job_title = str(draft.get("job_title") or "")
             self._show_profile()
             self.job.setPlainText(draft.get("job_description", ""))
             self.brief.setPlainText(draft.get("edit_request", ""))
@@ -595,6 +609,7 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not busy)
         self.progress.setVisible(busy)
         self.export_button.setEnabled(not busy and self._can_export())
+        self.cover_button.setEnabled(not busy and self._can_export())
 
     def _can_export(self):
         if self.result is None or self.run_dir is None:
@@ -672,6 +687,7 @@ class MainWindow(QMainWindow):
         self.review_button.setVisible(report.get("draft_mode") != "inspiration" and bool(result.get("plan", {}).get("proposed_claims")))
         self._dirty = True
         self.export_button.setEnabled(bool(self._can_export()))
+        self.cover_button.setEnabled(bool(self._can_export()))
         labels = {"ready": "Checks passed. Review the PDF before submitting.",
                   "needs_content": "Automatic page-fill refinement could not reach the fixed one-page target. See the checks.",
                   "needs_review": "Content needs review. See Changes and checks."}
@@ -713,17 +729,45 @@ class MainWindow(QMainWindow):
     def export_pdf(self):
         if not self._can_export() or self.worker is not None:
             return
-        name = re.sub(r'[^\w .-]', "", self.profile.name).strip() or "Resume"
-        path, _ = QFileDialog.getSaveFileName(self, "Save checked resume", name + " - Resume.pdf", "PDF (*.pdf)")
-        if not path:
-            return
-        destination = Path(path)
+        if self.job_company and self.job_title:
+            destination = role_folder(self.job_company, self.job_title) / "Alnajjar_Resume.pdf"
+        else:
+            path, _ = QFileDialog.getSaveFileName(self, "Save checked resume", "Alnajjar_Resume.pdf", "PDF (*.pdf)")
+            if not path:
+                return
+            destination = Path(path)
         if not destination.suffix:
             destination = destination.with_suffix(".pdf")
         try:
             export_checked(self.run_dir, destination)
         except (ValueError, OSError, KeyError) as exc:
             self.status.setText(f"Could not save the checked PDF: {exc}")
+        else:
+            self.status.setText(f"Saved {destination.name}.")
+
+    def create_cover_letter(self):
+        if not self._can_export() or self.worker is not None:
+            return
+        company = self.job_company or "Hiring Team"
+        title = self.job_title or self.job.toPlainText().splitlines()[0].strip()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Review cover letter")
+        dialog.resize(720, 640)
+        layout = QVBoxLayout(dialog)
+        editor = QPlainTextEdit()
+        editor.setPlainText(draft_text(self.profile, company, title, self.keywords.toPlainText()))
+        layout.addWidget(editor)
+        controls = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        controls.accepted.connect(dialog.accept)
+        controls.rejected.connect(dialog.reject)
+        layout.addWidget(controls)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        destination = role_folder(company, title) / "Alnajjar_CoverLetter.pdf"
+        try:
+            export_cover_pdf(editor.toPlainText(), self.profile, destination)
+        except (ValueError, OSError) as exc:
+            self.status.setText(f"Could not save the cover letter: {exc}")
         else:
             self.status.setText(f"Saved {destination.name}.")
 

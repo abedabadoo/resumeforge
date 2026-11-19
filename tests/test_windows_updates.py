@@ -30,9 +30,9 @@ def release(version, *, url=None, digest=None, size=1234, draft=False, prereleas
 
 class WindowsUpdaterTests(unittest.TestCase):
     def test_checks_the_latest_stable_release(self):
-        response = io.BytesIO(json.dumps(release("0.4.4")).encode("utf-8"))
+        response = io.BytesIO(json.dumps(release("0.4.5")).encode("utf-8"))
         with patch("resumeforge.windows_updates.urllib.request.urlopen", return_value=response):
-            self.assertEqual(check_for_update().tag, "v0.4.4")
+            self.assertEqual(check_for_update().tag, "v0.4.5")
 
     def test_selects_newest_published_windows_release_above_installed_version(self):
         releases = [release("0.4.2"), release("0.4.10"), release("0.4.3")]
