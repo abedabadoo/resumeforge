@@ -6,9 +6,11 @@ A native Windows and Intel macOS desktop app for tailoring a resume and saving a
 
 ## Install on Windows
 
-Download **ResumeForge-Setup-x64.exe** from the [Windows desktop release](https://github.com/abedabadoo/resumeforge/releases/tag/v0.4.1). Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs.
+Download **ResumeForge-Setup-x64.exe** from the [Windows releases](https://github.com/abedabadoo/resumeforge/releases). Run the installer, then open **ResumeForge** from the Start menu. The installer includes Python, the native Qt interface, fonts, and the PDF engine. If you prefer a portable copy, extract the entire **ResumeForge-Windows-x64.zip** and launch **ResumeForge.exe** inside its folder. Both builds target 64-bit Intel and AMD Windows PCs. The editor stacks its controls and preview when the window is narrow, including a 900 × 1440 portrait display.
 
 A fresh public install opens a fictional demo profile. An upgrade opens your previously saved workspace. Import your resume or open your existing profile, then choose **Analyze job description** to see the posting’s ranked priorities.
+
+Use **Check for updates…** in the desktop toolbar to look for a newer published Windows release. If one is available, ResumeForge downloads the official installer, checks its GitHub SHA-256 digest, and asks before closing and installing. It then reopens the same workspace. The check runs only when you click the button; it does not install updates in the background.
 
 The first launch can build with offline examples. To generate new wording with Qwen, start your local model service on your PC. Open **Model settings**, select **Ollama** or **OpenAI-compatible endpoint**, enter the service URL, and choose **Find installed models** or enter its model name. The PC model is a separate installation. Your workspace, generated previews, and run reports are stored under `%LOCALAPPDATA%\ResumeForge\workspace`.
 
@@ -47,7 +49,7 @@ If port 8766 is occupied, run `python -m resumeforge serve --port 8767 --open` u
 1. Open your profile or import a resume. Generic PDF/DOCX import uses the configured model to map extracted text to the right jobs. You can also supply structured profile JSON.
 2. Paste the posting and choose **Analyze job description**. Review the ranked capabilities and their supporting evidence. ResumeForge distinguishes exact matches, related experience, and gaps. Add, remove, or reorder the priorities and give any editing instructions before building.
 3. **Generate new example achievements** is the default. It writes replacement bullets for relevant roles and can invent projects, tools, and numbers. Each example belongs to the current draft. The PDF prints it as ordinary resume prose. The app shows which bullets it generated. With the model disconnected, the editor draws on built-in examples.
-4. Choose **Build resume**. Use **Edit generated bullets** to change wording or clear an example, then refit the page. **Save checked PDF** exports the version shown in the preview after its page and content checks pass. For applications, replace invented claims with your actual experience.
+4. Choose **Build resume**. Use **Edit generated bullets** to change wording or clear an example, then refit the page. **Save checked PDF** exports the version shown in the preview after its page and content checks pass. After the resume is checked, **Create cover letter…** opens an editable draft and saves a PDF only when you choose Save. For applications, replace invented claims with your actual experience.
 5. To work from your source alone, choose **Rewrite using my experience**, or choose **Use my verified wording** for exact source statements. You can add confirmed, role-specific experience to the profile separately.
 
 The Skills row prioritizes both explicitly named tools and skills relevant to the broader capability. For example, cloud infrastructure can support retaining AWS and IaC, while Microsoft Azure alone does not establish Azure DevOps experience.

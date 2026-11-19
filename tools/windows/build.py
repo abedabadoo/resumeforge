@@ -106,7 +106,8 @@ def verify(stage):
             f.seek(offset)
             if f.read(6) != b"PE\0\0\x64\x86":
                 raise ValueError(f"Expected an x64 executable: {file}")
-    for name in ("desktop.py", "desktop_window.py", "fonts/LiberationSans-Regular.ttf", "data/abu.profile.json"):
+    for name in ("desktop.py", "desktop_window.py", "windows_updates.py",
+                 "windows_update_helper.ps1", "fonts/LiberationSans-Regular.ttf", "data/abu.profile.json"):
         if not (lib / "resumeforge" / name).is_file():
             raise ValueError(f"Missing application resource: {name}")
 

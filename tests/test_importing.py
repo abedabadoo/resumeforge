@@ -1,5 +1,6 @@
 """Portable scanner tests; original personal documents are optional fixtures."""
 from io import BytesIO
+import hashlib
 from pathlib import Path
 import unittest
 import warnings
@@ -72,8 +73,11 @@ class ImportTests(unittest.TestCase):
 
     @unittest.skipUnless(ORIGINAL.is_file(), 'Original personal PDF is not required for the portable suite')
     def test_known_baseline_hash_returns_checked_profile(self):
-        result = import_document(ORIGINAL.name, ORIGINAL.read_bytes(), ModelSettings())
         expected = Profile.model_validate_json((ROOT / 'examples' / 'abu.profile.json').read_text())
+        content = ORIGINAL.read_bytes()
+        if hashlib.sha256(content).hexdigest() != expected.source_sha256:
+            self.skipTest('The local resume differs from this checked baseline')
+        result = import_document(ORIGINAL.name, content, ModelSettings())
         self.assertEqual(result['profile'], expected.model_dump())
         self.assertEqual(sum(len(role['bullets']) for role in result['profile']['roles']), 11)
         self.assertNotIn('(cid:', str(result['profile']))

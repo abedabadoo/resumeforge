@@ -6,16 +6,19 @@ from pathlib import Path
 import re
 import threading
 import sys
+import os
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit,
+from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLineEdit,
     QListWidget, QListWidgetItem, QMainWindow, QFileDialog, QMessageBox, QPlainTextEdit,
+    QDialog, QDialogButtonBox,
     QProgressBar, QPushButton, QSplitter, QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
 from .desktop_preview import PagePreview, plain_label
 from .desktop_support import export_checked, load_draft, save_draft
+from .cover_letter import draft_text, export_pdf as export_cover_pdf, role_folder
 from .engine import run
 from .ideas import IdeaRequest, brainstorm
 from .importing import MAX_BYTES, import_document
@@ -115,6 +118,8 @@ class MainWindow(QMainWindow):
     def __init__(self, data_dir: Path):
         super().__init__()
         self.data_dir = Path(data_dir)
+        self.job_company = ""
+        self.job_title = ""
         self.profile = Profile.model_validate_json((Path(__file__).with_name("data") /
                                                     "abu.profile.json").read_text(encoding="utf-8"))
         self.settings = default_settings()
@@ -138,7 +143,7 @@ class MainWindow(QMainWindow):
         self._updating = False
         self.setWindowTitle("ResumeForge")
         self.resize(1220, 835)
-        self.setMinimumSize(790, 590)
+        self.setMinimumSize(580, 590)
         self.setStyleSheet(STYLE)
         self._create_interface()
         self._show_profile()
@@ -161,21 +166,24 @@ class MainWindow(QMainWindow):
         outer.setSpacing(0)
         header = QWidget()
         header.setObjectName("banner")
-        top = QHBoxLayout(header)
+        top = QGridLayout(header)
         top.setContentsMargins(20, 12, 20, 12)
-        top.addWidget(plain_label("ResumeForge", "brand"))
-        top.addStretch()
+        top.setHorizontalSpacing(8)
+        top.setVerticalSpacing(8)
+        self.brand = plain_label("ResumeForge", "brand")
         self.account = plain_label("", "account")
-        top.addWidget(self.account)
         self.import_button = button("Import resume…", "importButton", self.import_resume)
         self.save_button = button("Save workspace", "saveButton", self.save_workspace)
         self.settings_button = button("Model settings…", "settingsButton", self.configure_model)
         self.update_button = button("Check for updates…", "updateButton", self.check_for_updates)
         controls = [self.import_button, self.save_button, self.settings_button]
-        if sys.platform == "darwin" and getattr(sys, "frozen", False):
+        if os.environ.get("RESUMEFORGE_COMBINED") != "1" and (
+            sys.platform == "win32" or (sys.platform == "darwin" and getattr(sys, "frozen", False))
+        ):
             controls.append(self.update_button)
-        for widget in controls:
-            top.addWidget(widget)
+        self.header_controls = controls
+        self.header_grid = top
+        self.layout_mode = None
         outer.addWidget(header)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
@@ -210,20 +218,61 @@ class MainWindow(QMainWindow):
         self.progress.setTextVisible(False)
         self.progress.hide()
         content.addWidget(self.progress)
-        footer = QHBoxLayout()
+        footer = QGridLayout()
         self.status = plain_label("Paste a job description to see its priorities.", "runStatus")
-        footer.addWidget(self.status, 1)
+        self.status.setWordWrap(True)
+        footer.addWidget(self.status, 0, 0, 1, 3)
         self.review_button = button("Review proposed claims…", "reviewButton", self.review_claims)
         self.review_button.hide()
-        footer.addWidget(self.review_button)
+        footer.addWidget(self.review_button, 1, 0)
         self.edit_bullets_button = button("Edit generated bullets…", "editGenerated", self.edit_generated)
         self.edit_bullets_button.hide()
-        footer.addWidget(self.edit_bullets_button)
+        footer.addWidget(self.edit_bullets_button, 1, 1)
         self.export_button = button("Save checked PDF…", "exportButton", self.export_pdf)
         self.export_button.setEnabled(False)
-        footer.addWidget(self.export_button)
+        footer.addWidget(self.export_button, 1, 2)
+        self.cover_button = button("Create cover letter…", "coverButton", self.create_cover_letter)
+        self.cover_button.setEnabled(False)
+        footer.addWidget(self.cover_button, 2, 2)
         content.addLayout(footer)
         outer.addLayout(content, 1)
+        self._fit_workspace()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "header_grid"):
+            self._fit_workspace()
+
+    def _fit_workspace(self):
+        mode = "compact" if self.width() <= 720 else "portrait" if self.width() <= 1100 else "wide"
+        if mode == self.layout_mode:
+            return
+        self.layout_mode = mode
+        grid = self.header_grid
+        for widget in (self.brand, self.account, *self.header_controls):
+            grid.removeWidget(widget)
+        for column in range(6):
+            grid.setColumnStretch(column, 0)
+        grid.addWidget(self.brand, 0, 0)
+        if mode == "wide":
+            grid.setColumnStretch(0, 1)
+            grid.addWidget(self.account, 0, 1)
+            for index, control in enumerate(self.header_controls, 2):
+                grid.addWidget(control, 0, index)
+        elif mode == "portrait":
+            grid.addWidget(self.account, 0, 1, 1, 3, Qt.AlignmentFlag.AlignRight)
+            for index, control in enumerate(self.header_controls):
+                grid.setColumnStretch(index, 1)
+                grid.addWidget(control, 1, index)
+        else:
+            grid.addWidget(self.account, 0, 1, Qt.AlignmentFlag.AlignRight)
+            for index, control in enumerate(self.header_controls):
+                grid.setColumnStretch(index % 2, 1)
+                grid.addWidget(control, 1 + index // 2, index % 2)
+        orientation = Qt.Orientation.Horizontal if mode == "wide" else Qt.Orientation.Vertical
+        if self.splitter.orientation() != orientation:
+            self.splitter.setOrientation(orientation)
+            self.splitter.setSizes([430, 770] if mode == "wide" else [440, 770])
 
     def _tailor_tab(self):
         self.steps = QStackedWidget()
@@ -462,6 +511,7 @@ class MainWindow(QMainWindow):
             self.review_button.hide()
             self.edit_bullets_button.hide()
             self.export_button.setEnabled(False)
+            self.cover_button.setEnabled(False)
             self.right.setTabText(0, "Source resume")
             self.preview.show_source(self.profile)
             self.review_notes.clear()
@@ -481,7 +531,8 @@ class MainWindow(QMainWindow):
                 "profile": self.profile.model_dump(),
                 "settings": self._current_settings().model_dump(), "job_description": self.job.toPlainText(),
                 "edit_request": self.brief.toPlainText(), "keywords": self.keywords.toPlainText(),
-                "ideas": self.ideas, "idea_role": self.idea_role.currentData(), "idea_topic": self.idea_topic.text()}
+                "ideas": self.ideas, "idea_role": self.idea_role.currentData(), "idea_topic": self.idea_topic.text(),
+                "job_company": self.job_company, "job_title": self.job_title}
 
     def _restore(self):
         try:
@@ -498,6 +549,8 @@ class MainWindow(QMainWindow):
             restored = {key: [Idea.model_validate(i).model_dump() for i in batch[:24]]
                         for key, batch in draft.get("ideas", {}).items() if key in roles}
             self.profile, self.settings, self.ideas = profile, settings, restored
+            self.job_company = str(draft.get("job_company") or "")
+            self.job_title = str(draft.get("job_title") or "")
             self._show_profile()
             self.job.setPlainText(draft.get("job_description", ""))
             self.brief.setPlainText(draft.get("edit_request", ""))
@@ -556,6 +609,7 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not busy)
         self.progress.setVisible(busy)
         self.export_button.setEnabled(not busy and self._can_export())
+        self.cover_button.setEnabled(not busy and self._can_export())
 
     def _can_export(self):
         if self.result is None or self.run_dir is None:
@@ -633,6 +687,7 @@ class MainWindow(QMainWindow):
         self.review_button.setVisible(report.get("draft_mode") != "inspiration" and bool(result.get("plan", {}).get("proposed_claims")))
         self._dirty = True
         self.export_button.setEnabled(bool(self._can_export()))
+        self.cover_button.setEnabled(bool(self._can_export()))
         labels = {"ready": "Checks passed. Review the PDF before submitting.",
                   "needs_content": "Automatic page-fill refinement could not reach the fixed one-page target. See the checks.",
                   "needs_review": "Content needs review. See Changes and checks."}
@@ -674,17 +729,45 @@ class MainWindow(QMainWindow):
     def export_pdf(self):
         if not self._can_export() or self.worker is not None:
             return
-        name = re.sub(r'[^\w .-]', "", self.profile.name).strip() or "Resume"
-        path, _ = QFileDialog.getSaveFileName(self, "Save checked resume", name + " - Resume.pdf", "PDF (*.pdf)")
-        if not path:
-            return
-        destination = Path(path)
+        if self.job_company and self.job_title:
+            destination = role_folder(self.job_company, self.job_title) / "Alnajjar_Resume.pdf"
+        else:
+            path, _ = QFileDialog.getSaveFileName(self, "Save checked resume", "Alnajjar_Resume.pdf", "PDF (*.pdf)")
+            if not path:
+                return
+            destination = Path(path)
         if not destination.suffix:
             destination = destination.with_suffix(".pdf")
         try:
             export_checked(self.run_dir, destination)
         except (ValueError, OSError, KeyError) as exc:
             self.status.setText(f"Could not save the checked PDF: {exc}")
+        else:
+            self.status.setText(f"Saved {destination.name}.")
+
+    def create_cover_letter(self):
+        if not self._can_export() or self.worker is not None:
+            return
+        company = self.job_company or "Hiring Team"
+        title = self.job_title or self.job.toPlainText().splitlines()[0].strip()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Review cover letter")
+        dialog.resize(720, 640)
+        layout = QVBoxLayout(dialog)
+        editor = QPlainTextEdit()
+        editor.setPlainText(draft_text(self.profile, company, title, self.keywords.toPlainText()))
+        layout.addWidget(editor)
+        controls = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        controls.accepted.connect(dialog.accept)
+        controls.rejected.connect(dialog.reject)
+        layout.addWidget(controls)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        destination = role_folder(company, title) / "Alnajjar_CoverLetter.pdf"
+        try:
+            export_cover_pdf(editor.toPlainText(), self.profile, destination)
+        except (ValueError, OSError) as exc:
+            self.status.setText(f"Could not save the cover letter: {exc}")
         else:
             self.status.setText(f"Saved {destination.name}.")
 
@@ -811,11 +894,15 @@ class MainWindow(QMainWindow):
             return
         self._updating = True
         self.update_button.setEnabled(False)
-        self.status.setText("Checking for an Intel Mac update…")
+        self.status.setText("Checking for a Windows update…" if sys.platform == "win32"
+                            else "Checking for an Intel Mac update…")
 
         def work():
             try:
-                from .mac_updates import check_for_update
+                if sys.platform == "win32":
+                    from .windows_updates import check_for_update
+                else:
+                    from .mac_updates import check_for_update
                 self.update_signals.checked.emit(check_for_update())
             except Exception as exc:
                 self.update_signals.failed.emit(str(exc))
@@ -824,13 +911,15 @@ class MainWindow(QMainWindow):
 
     def _update_checked(self, update):
         if update is None:
-            self._finish_update("ResumeForge is up to date.")
-            QMessageBox.information(self, "ResumeForge updates", "You're running the latest available Intel Mac release.")
+            self._finish_update("No newer release is available.")
+            message = ("No newer Windows release is published."
+                       if sys.platform == "win32" else "You're running the latest available Intel Mac release.")
+            QMessageBox.information(self, "ResumeForge updates", message)
             return
         size = round(update.size / (1024 * 1024))
         question = (f"ResumeForge {update.tag} is available ({size} MB).\n\n"
-                    "ResumeForge will download and verify the update, close, replace "
-                    "the app, then reopen it. Your saved workspace stays intact.\n\n"
+                    "ResumeForge will download and verify the update, close, install "
+                    "the new version, then reopen your workspace.\n\n"
                     "Download this update?")
         answer = QMessageBox.question(self, "ResumeForge update available", question,
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -838,11 +927,15 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.StandardButton.Yes:
             self._finish_update("Update cancelled.")
             return
-        self.status.setText("Downloading and verifying the Intel Mac update…")
+        self.status.setText("Downloading and verifying the Windows update…" if sys.platform == "win32"
+                            else "Downloading and verifying the Intel Mac update…")
 
         def work():
             try:
-                from .mac_updates import prepare_update
+                if sys.platform == "win32":
+                    from .windows_updates import prepare_update
+                else:
+                    from .mac_updates import prepare_update
                 self.update_signals.prepared.emit(prepare_update(update))
             except Exception as exc:
                 self.update_signals.failed.emit(str(exc))
@@ -850,12 +943,18 @@ class MainWindow(QMainWindow):
         threading.Thread(target=work, daemon=True).start()
 
     def _update_prepared(self, prepared):
-        from .mac_updates import install_after_exit
-        move = (f"\n\nThis copy is in a protected location. The updated version will "
-                f"be installed at:\n{prepared.destination_app}"
-                if prepared.installed_app != prepared.destination_app else "")
+        if sys.platform == "win32":
+            from .windows_updates import install_after_exit
+            move = f"\n\nInstall location:\n{prepared.target_dir}"
+            verification = "The update passed SHA-256 integrity verification."
+        else:
+            from .mac_updates import install_after_exit
+            move = (f"\n\nThis copy is in a protected location. The updated version will "
+                    f"be installed at:\n{prepared.destination_app}"
+                    if prepared.installed_app != prepared.destination_app else "")
+            verification = "The update passed integrity and app-signature checks."
         answer = QMessageBox.question(
-            self, "Ready to install", "The update passed integrity and app-signature checks."
+            self, "Ready to install", verification
             + move + "\n\nClose ResumeForge and install it now?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes)
@@ -869,7 +968,10 @@ class MainWindow(QMainWindow):
             self._finish_update("Close cancelled; update was not installed.")
             return
         try:
-            install_after_exit(prepared)
+            if sys.platform == "win32":
+                install_after_exit(prepared, self.data_dir)
+            else:
+                install_after_exit(prepared)
         except Exception as exc:
             self.show()
             self._update_failed(str(exc))
