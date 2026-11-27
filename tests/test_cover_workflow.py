@@ -18,7 +18,8 @@ class CoverWorkflowTests(unittest.TestCase):
         opening = "This paragraph relates our release monitoring work to the posting."
         unsupported = "I led the identity review program for the entire organization."
         supported = "I would bring my experience checking deployment records to your identity reviews."
-        draft = letters.LetterProse(paragraphs=[opening, unsupported], source_number=0)
+        closing = "I would welcome a conversation about these responsibilities."
+        draft = letters.LetterProse(paragraphs=[opening, unsupported, closing], source_number=0)
         changes = [
             {
                 "paragraph": 1,
@@ -31,7 +32,7 @@ class CoverWorkflowTests(unittest.TestCase):
             corrected = letters._correct_prose(
                 draft, "The claim overstates ownership.", ModelSettings(), {}
             )
-        self.assertEqual(corrected.paragraphs, [opening, supported])
+        self.assertEqual(corrected.paragraphs, [opening, supported, closing])
 
     def test_checked_resume_creates_role_specific_letter_and_keeps_edits(self):
         with tempfile.TemporaryDirectory() as temporary:
