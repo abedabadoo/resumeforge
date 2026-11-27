@@ -14,6 +14,25 @@ from resumeforge.models import ModelSettings, Profile, RunRequest
 
 
 class CoverWorkflowTests(unittest.TestCase):
+    def test_corrections_keep_other_paragraphs_and_require_an_exact_anchor(self):
+        opening = "This paragraph relates our release monitoring work to the posting."
+        unsupported = "I led the identity review program for the entire organization."
+        supported = "I would bring my experience checking deployment records to your identity reviews."
+        draft = letters.LetterProse(paragraphs=[opening, unsupported], source_number=0)
+        changes = [
+            {
+                "paragraph": 1,
+                "original": "This opening was entirely different.",
+                "replacement": "This change must have no effect.",
+            },
+            {"paragraph": 2, "original": unsupported, "replacement": supported},
+        ]
+        with patch.object(letters, "call_json", return_value={"changes": changes}):
+            corrected = letters._correct_prose(
+                draft, "The claim overstates ownership.", ModelSettings(), {}
+            )
+        self.assertEqual(corrected.paragraphs, [opening, supported])
+
     def test_checked_resume_creates_role_specific_letter_and_keeps_edits(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
