@@ -7,7 +7,7 @@ name = "resumeforge-local"
 version = "0.4.4"
 description = "Local resume tailoring with measured, fixed-geometry PDF output"
 requires-python = ">=3.10"
-dependencies = ["reportlab>=4.2,<5", "pdfplumber>=0.11,<1", "pypdf>=5,<7", "pydantic>=2.10,<3", "python-docx>=1.1,<2"]
+dependencies = ["reportlab>=4.2,<5", "pdfplumber>=0.11,<1", "pypdf>=5,<7", "pydantic>=2.10,<3", "python-docx>=1.1,<2", "certifi>=2024.7.4"]
 
 [project.optional-dependencies]
 desktop = ["PySide6-Essentials==6.11.3", "pypdfium2>=4.30", "Pillow>=10"]
